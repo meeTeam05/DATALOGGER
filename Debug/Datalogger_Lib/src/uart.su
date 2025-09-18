@@ -1,0 +1,3 @@
+E:/STM32CubeIDE/mylib/Datalogger_Lib/src/uart.c:37:6:UART_Init	16	static
+E:/STM32CubeIDE/mylib/Datalogger_Lib/src/uart.c:48:6:HAL_UART_RxCpltCallback	16	static
+E:/STM32CubeIDE/mylib/Datalogger_Lib/src/uart.c:58:6:UART_Handle	16	static
