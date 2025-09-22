@@ -1,4 +1,4 @@
-# ESP32–STM32 MQTT Bridge — Modular Architecture
+# ESP32 FIRMWARE
 
 ## 📁 Project Directory Structure
 
