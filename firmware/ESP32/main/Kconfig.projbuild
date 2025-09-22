@@ -1,0 +1,162 @@
+menu "ESP32 MQTT5 Bridge Configuration"
+
+    menu "MQTT Broker Settings"
+        config BROKER_URL
+            string "MQTT Broker URL"
+            default "mqtt://mqtt.eclipseprojects.io"
+            help
+                URL of the MQTT broker to connect to.
+                Examples:
+                - mqtt://mqtt.eclipseprojects.io
+                - mqtt://broker.hivemq.com
+                - mqtt://test.mosquitto.org
+
+        config MQTT_CLIENT_ID
+            string "MQTT Client ID"
+            default "ESP32_STM32_Bridge"
+            help
+                Unique client ID for MQTT connection.
+                Leave blank to auto-generate from MAC address.
+
+        config MQTT_USERNAME
+            string "MQTT Username"
+            default "STM32Bridge"
+            help
+                Username for MQTT broker authentication
+
+        config MQTT_PASSWORD
+            string "MQTT Password"
+            default "stm32bridge"
+            help
+                Password for MQTT broker authentication
+    endmenu
+
+    menu "STM32 Communication UART Configuration"
+        config MQTT_UART_PORT_NUM
+            int "UART port number for STM32 communication"
+            range 0 2 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S3
+            default 2 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S3
+            range 0 1
+            default 1
+            help
+                UART port number for communicating with STM32.
+                This is separate from UART0 (console) to avoid mixing logs.
+                UART0: Console/Debug logs
+                UART1/UART2: STM32 communication
+
+        config MQTT_UART_BAUD_RATE
+            int "STM32 UART communication speed"
+            range 9600 921600
+            default 115200
+            help
+                UART communication speed for STM32 communication.
+                Must match STM32 UART configuration.
+                Common values: 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
+
+        config MQTT_UART_TXD
+            int "STM32 UART TXD pin number"
+            range 0 39 if IDF_TARGET_ESP32
+            range 0 46 if IDF_TARGET_ESP32S2
+            range 0 48 if IDF_TARGET_ESP32S3
+            range 0 21 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
+            default 17 if IDF_TARGET_ESP32
+            default 17 if IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
+            default 7 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
+            help
+                GPIO number for STM32 UART TX pin.
+                Connect this to STM32 RX pin.
+                ESP32: Any GPIO except input-only pins (34-39)
+                Recommended: GPIO 16, 17, 25, 26, 27
+
+        config MQTT_UART_RXD
+            int "STM32 UART RXD pin number"
+            range 0 39 if IDF_TARGET_ESP32
+            range 0 46 if IDF_TARGET_ESP32S2
+            range 0 48 if IDF_TARGET_ESP32S3
+            range 0 21 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
+            default 16 if IDF_TARGET_ESP32
+            default 16 if IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
+            default 6 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
+            help
+                GPIO number for STM32 UART RX pin.
+                Connect this to STM32 TX pin.
+                ESP32: Any GPIO
+                Recommended: GPIO 16, 17, 25, 26, 27
+    endmenu
+
+    menu "Hardware Control Configuration"
+        config RELAY_GPIO_NUM
+            int "Relay control GPIO pin number"
+            range 0 39 if IDF_TARGET_ESP32
+            range 0 46 if IDF_TARGET_ESP32S2
+            range 0 48 if IDF_TARGET_ESP32S3
+            range 0 21 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
+            default 18 if IDF_TARGET_ESP32
+            default 18 if IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
+            default 8 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
+            help
+                GPIO number for relay control output.
+                Connect this to relay module input.
+                ESP32: Any GPIO except input-only pins (34-39)
+                Recommended: GPIO 18, 19, 21, 22, 23
+    endmenu
+
+    menu "WiFi Connection Configuration"
+        config EXAMPLE_WIFI_SSID
+            string "WiFi SSID"
+            default "myssid"
+            help
+                SSID (network name) for the example to connect to.
+
+        config EXAMPLE_WIFI_PASSWORD
+            string "WiFi Password"
+            default "mypassword"
+            help
+                WiFi password (WPA or WPA2) for the example to use.
+
+        config EXAMPLE_WIFI_LISTEN_INTERVAL
+            int "WiFi listen interval"
+            range 0 100
+            default 3
+            help
+                Interval for station to listen to beacon from AP. The unit of listen interval is one beacon interval.
+                For example, if beacon interval is 100 ms and listen interval is 3, the interval for station to listen
+                to beacon is 300 ms.
+
+        config EXAMPLE_WIFI_POWER_SAVE
+            bool "Enable WiFi Power save mode"
+            default y
+            help
+                Enable WiFi power save mode for station.
+
+        choice EXAMPLE_POWER_SAVE_MODE
+            prompt "power save mode"
+            default EXAMPLE_POWER_SAVE_MIN_MODEM
+            depends on EXAMPLE_WIFI_POWER_SAVE
+            help
+                Power save mode for the esp32 to use. Modem sleep mode includes minimum and maximum power save modes.
+                In minimum power save mode, station wakes up every DTIM to receive beacon. Broadcast data will not be
+                lost because it is transmitted after DTIM. However, it can not save much more power if DTIM is short
+                for DTIM is determined by AP.
+                In maximum power save mode, station wakes up every listen interval to receive beacon. Broadcast data
+                may be lost because station may be in sleep state at DTIM time. If listen interval is longer, more power
+                is saved but broadcast data is more easy to lose.
+
+            config EXAMPLE_POWER_SAVE_MIN_MODEM
+                bool "Minimum modem power saving"
+            config EXAMPLE_POWER_SAVE_MAX_MODEM
+                bool "Maximum modem power saving"
+        endchoice
+
+        config EXAMPLE_MAX_RETRY
+            int "Maximum retry attempts"
+            default 5
+            help
+                Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
+    endmenu
+
+    config BROKER_URL_FROM_STDIN
+        bool
+        default y if BROKER_URL = "FROM_STDIN"
+
+endmenu

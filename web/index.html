@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHT31 Temperature Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            padding: 5px;
+            overflow: hidden;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 100%;
+            height: 100vh;
+            margin: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header Styles */
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 1.6rem;
+            margin-bottom: 5px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* Controls Section */
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 10px;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+            flex-shrink: 0;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.9rem;
+        }
+
+        /* Frame Rate Selector */
+        .frame-selector {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .frame-btn {
+            padding: 8px 12px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .frame-btn:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .frame-btn.active {
+            background: #667eea;
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        /* Button Styles */
+        .mode-btn, .stm32-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .mode-btn {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
+        }
+
+        .mode-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+        }
+
+        .stop-btn {
+            background: linear-gradient(45deg, #dc3545, #fd7e14) !important;
+        }
+
+        .single-btn {
+            background: linear-gradient(45deg, #17a2b8, #20c997) !important;
+        }
+
+        .stm32-btn {
+            background: linear-gradient(45deg, #dc3545, #e83e8c);
+            color: white;
+            box-shadow: 0 6px 20px rgba(220, 53, 69, 0.3);
+        }
+
+        .stm32-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.4);
+        }
+
+        .stm32-btn.on {
+            background: linear-gradient(45deg, #28a745, #20c997);
+        }
+
+        /* Combined Current Display */
+        .current-display {
+            text-align: center;
+            font-size: 1.6rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            padding: 12px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+
+        /* Status Display */
+        .status-display {
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 8px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 8px;
+            height: 80px;
+            overflow-y: auto;
+            border: 2px solid #00ff00;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
+            font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .status-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #00ff00;
+            padding-left: 10px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        /* Charts Container */
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .chart-wrapper {
+            background: white;
+            padding: 8px;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            border: 2px solid rgba(102, 126, 234, 0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .chart-title {
+            text-align: center;
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .chart-wrapper canvas {
+            flex: 1;
+            min-height: 0 !important;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { 
+                opacity: 0; 
+                transform: translateX(-10px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateX(0); 
+            }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 1s ease;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            
+            .controls {
+                grid-template-columns: 1fr;
+                text-align: center;
+                padding: 8px;
+            }
+            
+            .header h1 {
+                font-size: 1.4rem;
+            }
+            
+            .current-display {
+                font-size: 1.4rem;
+                padding: 10px;
+            }
+            
+            .status-display {
+                height: 60px;
+                font-size: 0.7rem;
+            }
+        }
+
+        @media (max-height: 600px) {
+            .header h1 {
+                font-size: 1.3rem;
+            }
+            
+            .current-display {
+                font-size: 1.3rem;
+                padding: 8px;
+            }
+            
+            .status-display {
+                height: 60px;
+            }
+            
+            .controls {
+                padding: 6px;
+                gap: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌡️ SHT31 Temperature & Humidity Monitor</h1>
+            <p>Real-time Monitoring Dashboard</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Frame Rate (Hz)</label>
+                <div class="frame-selector">
+                    <button class="frame-btn" data-rate="0.5">0.5</button>
+                    <button class="frame-btn active" data-rate="1">1</button>
+                    <button class="frame-btn" data-rate="2">2</button>
+                    <button class="frame-btn" data-rate="4">4</button>
+                    <button class="frame-btn" data-rate="10">10</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>Operating Mode</label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                    <button class="mode-btn" id="periodicBtn">Periodic</button>
+                    <button class="mode-btn stop-btn" id="stopBtn" style="display: none;">Stop</button>
+                    <button class="mode-btn single-btn" id="singleBtn">Single Read</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>Device Control</label>
+                <button class="stm32-btn" id="stm32Btn">STM32 OFF</button>
+            </div>
+        </div>
+
+        <div class="current-display" id="currentDisplay">
+            Current: 24.5°C & 50.0% RH
+        </div>
+        
+        <div class="status-display" id="statusDisplay">
+            <div class="status-item">[INIT] SHT31 Temperature Monitor Started</div>
+            <div class="status-item">[INFO] Periodic mode active at 1 Hz</div>
+            <div class="status-item">[READY] System ready for data acquisition</div>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <div class="chart-title">🌡️ Temperature</div>
+                <canvas id="tempChart1" width="400" height="200"></canvas>
+            </div>
+            
+            <div class="chart-wrapper">
+                <div class="chart-title">💧 Humidity</div>
+                <canvas id="tempChart2" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        // Global variables
+        let isPeriodic = false;
+        let isSTM32On = false;
+        let frameRate = 1; // Hz
+        let intervalId = null;
+        let temperatureData = [];
+        let humidityData = [];
+        let statusQueue = [];
+        let maxDataPoints = 15;
+        let maxStatusItems = 5;
+        
+        // Current values for display (updated by both single and periodic)
+        let currentTemp = 24.5;
+        let currentHumi = 50.0;
+
+        // Chart configurations
+        const chartTempConfig = {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Temperature (°C)',
+                    data: [],
+                    borderColor: 'rgb(102, 126, 234)',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: 'rgba(102, 126, 234, 0.1)' },
+                        ticks: { color: '#2c3e50' }
+                    },
+                    x: {
+                        grid: { color: 'rgba(102, 126, 234, 0.1)' },
+                        ticks: { color: '#2c3e50' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#2c3e50' } }
+                },
+                animation: { duration: 300 }
+            }
+        };
+
+        const chartHumiConfig = {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Humidity (%)',
+                    data: [],
+                    borderColor: 'rgba(197, 102, 234, 1)',
+                    backgroundColor: 'rgba(197, 102, 234, 0.1)',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: 'rgba(197, 102, 234, 0.1)' },
+                        ticks: { color: '#2c3e50' }
+                    },
+                    x: {
+                        grid: { color: 'rgba(197, 102, 234, 0.1)' },
+                        ticks: { color: '#2c3e50' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#2c3e50' } }
+                },
+                animation: { duration: 300 }
+            }
+        };
+
+        // Initialize charts
+        const ctx1 = document.getElementById('tempChart1').getContext('2d');
+        const ctx2 = document.getElementById('tempChart2').getContext('2d');
+        const chart1 = new Chart(ctx1, chartTempConfig);
+        const chart2 = new Chart(ctx2, chartHumiConfig);
+
+        // Helper functions for MQTT data
+        function pushTemperature(newTemp) {
+            currentTemp = newTemp;
+            updateCurrentDisplay();
+            
+            // Only update chart if in periodic mode
+            if (isPeriodic) {
+                const timestamp = new Date().toLocaleTimeString();
+                chart1.data.labels.push(timestamp);
+                chart1.data.datasets[0].data.push(newTemp);
+                if (chart1.data.labels.length > maxDataPoints) {
+                    chart1.data.labels.shift();
+                    chart1.data.datasets[0].data.shift();
+                }
+                chart1.update('none');
+            }
+        }
+
+        function pushHumidity(newHumi) {
+            currentHumi = newHumi;
+            updateCurrentDisplay();
+            
+            // Only update chart if in periodic mode
+            if (isPeriodic) {
+                const timestamp = new Date().toLocaleTimeString();
+                chart2.data.labels.push(timestamp);
+                chart2.data.datasets[0].data.push(newHumi);
+                if (chart2.data.labels.length > maxDataPoints) {
+                    chart2.data.labels.shift();
+                    chart2.data.datasets[0].data.shift();
+                }
+                chart2.update('none');
+            }
+        }
+
+        // Update combined display
+        function updateCurrentDisplay() {
+            const el = document.getElementById('currentDisplay');
+            el.textContent = `Current: ${currentTemp}°C & ${currentHumi}% RH`;
+            el.classList.add('pulse');
+            setTimeout(() => el.classList.remove('pulse'), 1000);
+        }
+
+        // Simulate sensor readings
+        function generateTemperature() {
+            const baseTemp = 24.5;
+            const variation = (Math.random() - 0.5) * 2;
+            const trend = Math.sin(Date.now() / 10000) * 3;
+            return +(baseTemp + variation + trend).toFixed(1);
+        }
+
+        function generateHumidity() {
+            const baseHumi = 50.0;
+            const variation = (Math.random() - 0.5) * 5;
+            const trend = Math.sin(Date.now() / 15000) * 10;
+            return +(baseHumi + variation + trend).toFixed(1);
+        }
+
+        // Status management
+        function addStatus(message, type = 'INFO') {
+            const timestamp = new Date().toLocaleTimeString();
+            const statusItem = `[${type}] ${timestamp}: ${message}`;
+            
+            statusQueue.push(statusItem);
+            if (statusQueue.length > maxStatusItems) {
+                statusQueue.shift();
+            }
+            
+            updateStatusDisplay();
+        }
+
+        function updateStatusDisplay() {
+            const statusDisplay = document.getElementById('statusDisplay');
+            statusDisplay.innerHTML = statusQueue.map(item => 
+                `<div class="status-item">${item}</div>`
+            ).join('');
+            statusDisplay.scrollTop = statusDisplay.scrollHeight;
+        }
+
+        // Data update function (for periodic mode)
+        function updateDataPeriodic() {
+            const newTemp = generateTemperature();
+            const newHumi = generateHumidity();
+            const timestamp = new Date().toLocaleTimeString();
+            
+            // Update current values and display
+            currentTemp = newTemp;
+            currentHumi = newHumi;
+            updateCurrentDisplay();
+
+            // Update data arrays
+            temperatureData.push(newTemp);
+            if (temperatureData.length > maxDataPoints) {
+                temperatureData.shift();
+            }
+            
+            humidityData.push(newHumi);
+            if (humidityData.length > maxDataPoints) {
+                humidityData.shift();
+            }
+
+            // Update charts (only in periodic mode)
+            chart1.data.labels.push(timestamp);
+            chart1.data.datasets[0].data.push(newTemp);
+            if (chart1.data.labels.length > maxDataPoints) {
+                chart1.data.labels.shift();
+                chart1.data.datasets[0].data.shift();
+            }
+            chart1.update('none');
+
+            chart2.data.labels.push(timestamp);
+            chart2.data.datasets[0].data.push(newHumi);
+            if (chart2.data.labels.length > maxDataPoints) {
+                chart2.data.labels.shift();
+                chart2.data.datasets[0].data.shift();
+            }
+            chart2.update('none');
+
+            // Random status messages
+            if (Math.random() < 0.15) {
+                const messages = [
+                    `Temperature reading: ${newTemp}°C`,
+                    `Humidity reading: ${newHumi}%`,
+                    'SHT31 sensor communication OK',
+                    'Data acquisition stable',
+                    `Frame rate: ${frameRate} Hz maintained`
+                ];
+                addStatus(messages[Math.floor(Math.random() * messages.length)]);
+            }
+        }
+
+        // Single read function (only updates display, not charts)
+        function updateDataSingle() {
+            const newTemp = generateTemperature();
+            const newHumi = generateHumidity();
+            
+            // Update current values and display only
+            currentTemp = newTemp;
+            currentHumi = newHumi;
+            updateCurrentDisplay();
+            
+            addStatus(`Single read: ${newTemp}°C, ${newHumi}%`, 'SINGLE');
+        }
+
+        // Control functions
+        function startPeriodicMode() {
+            if (intervalId) clearInterval(intervalId);
+            
+            if (isSTM32On) {
+                isPeriodic = true;
+                const intervalMs = 1000 / frameRate;
+                intervalId = setInterval(updateDataPeriodic, intervalMs);
+                addStatus(`Started periodic acquisition at ${frameRate} Hz`, 'START');
+                
+                document.getElementById('stopBtn').style.display = 'block';
+                document.getElementById('periodicBtn').style.display = 'none';
+                
+                updateDataPeriodic();
+            } else {
+                addStatus('STM32 must be ON to start periodic mode', 'ERROR');
+            }
+        }
+
+        function stopPeriodicMode() {
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+                isPeriodic = false;
+                addStatus('Stopped periodic acquisition', 'STOP');
+            }
+            
+            document.getElementById('stopBtn').style.display = 'none';
+            document.getElementById('periodicBtn').style.display = 'block';
+        }
+
+        function singleRead() {
+            if (isSTM32On) {
+                updateDataSingle(); // Only updates display, not charts
+                addStatus('Single temperature/humidity reading taken', 'SINGLE');
+                
+                // Don't interrupt periodic mode for single reads
+            } else {
+                addStatus('STM32 must be ON for single readings', 'ERROR');
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Frame rate selector
+            document.querySelectorAll('.frame-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelector('.frame-btn.active').classList.remove('active');
+                    this.classList.add('active');
+                    frameRate = parseFloat(this.dataset.rate);
+                    addStatus(`Frame rate changed to ${frameRate} Hz`);
+                    
+                    if (isPeriodic && isSTM32On) {
+                        startPeriodicMode();
+                    }
+                });
+            });
+            
+            // Control buttons
+            document.getElementById('periodicBtn').addEventListener('click', startPeriodicMode);
+            document.getElementById('stopBtn').addEventListener('click', stopPeriodicMode);
+            document.getElementById('singleBtn').addEventListener('click', singleRead);
+            
+            // STM32 button
+            document.getElementById('stm32Btn').addEventListener('click', function() {
+                isSTM32On = !isSTM32On;
+                this.textContent = isSTM32On ? 'STM32 ON' : 'STM32 OFF';
+                this.classList.toggle('on');
+                
+                if (isSTM32On) {
+                    addStatus('STM32 powered ON', 'POWER');
+                } else {
+                    addStatus('STM32 powered OFF', 'POWER');
+                    stopPeriodicMode();
+                }
+            });
+        });
+
+        // MQTT Configuration (commented for demo)
+        /*
+        const MQTT_URL = "ws://localhost:8083/mqtt";
+        const TOPIC_TEMP = "esp32/sht31/temperature";
+        const TOPIC_HUMI = "esp32/sht31/humidity";
+
+        try {
+            const client = mqtt.connect(MQTT_URL, {
+                reconnectPeriod: 2000,
+                clean: true
+            });
+
+            client.on('connect', () => {
+                addStatus('MQTT connected (WebSocket)', 'INFO');
+                client.subscribe([TOPIC_TEMP, TOPIC_HUMI], (err) => {
+                    if (err) addStatus('Subscribe failed', 'ERROR');
+                    else addStatus(`Subscribed to MQTT topics`, 'INFO');
+                });
+            });
+
+            client.on('message', (topic, payload) => {
+                const value = parseFloat(payload.toString());
+                if (!isNaN(value)) {
+                    if (topic === TOPIC_TEMP) pushTemperature(value);
+                    if (topic === TOPIC_HUMI) pushHumidity(value);
+                }
+            });
+        } catch (e) {
+            addStatus('MQTT init failed: ' + e.message, 'ERROR');
+        }
+        */
+
+        // Initialize with demo data
+        setTimeout(() => {
+            addStatus('SHT31 sensor initialized successfully');
+            addStatus('Calibration completed');
+            addStatus('Ready for temperature/humidity monitoring');
+        }, 1000);
+    </script>
+</body>
+</html>

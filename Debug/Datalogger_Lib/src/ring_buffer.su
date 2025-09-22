@@ -1,5 +1,0 @@
-E:/STM32CubeIDE/mylib/Datalogger_Lib/src/ring_buffer.c:8:6:RingBuffer_Init	16	static
-E:/STM32CubeIDE/mylib/Datalogger_Lib/src/ring_buffer.c:14:6:RingBuffer_Put	24	static
-E:/STM32CubeIDE/mylib/Datalogger_Lib/src/ring_buffer.c:27:6:RingBuffer_Get	16	static
-E:/STM32CubeIDE/mylib/Datalogger_Lib/src/ring_buffer.c:39:10:RingBuffer_Available	16	static
-E:/STM32CubeIDE/mylib/Datalogger_Lib/src/ring_buffer.c:52:10:RingBuffer_Free	16	static
