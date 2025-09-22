@@ -1,57 +1,70 @@
-# ESP32-STM32 MQTT Bridge
+# ESP32–STM32 MQTT Bridge
 
-## Tổng quan
-Hệ thống này tạo ra một cầu nối MQTT giữa Web và STM32 thông qua ESP32. Mô hình hoạt động:
+## Overview
+
+This system creates an MQTT bridge between a web application and an STM32 microcontroller via an ESP32. Architecture:
 
 ```
-Web Application <---> MQTT Broker <---> ESP32 <---> STM32 (SHT3X Sensor)
+Web Application <--> MQTT Broker <--> ESP32 <--> STM32 (SHT3X Sensor)
 ```
 
-## Chức năng chính
+## Key Features
 
-### 1. Điều khiển SHT3X Sensor qua MQTT
-- **Topic nhận lệnh**: `esp32/sensor/sht3x/command`
-- **Các lệnh hỗ trợ**:
-  - `SHT3X SINGLE HIGH` - Đo một lần với độ chính xác cao
-  - `SHT3X PERIODIC 0.5 HIGH` - Đo liên tục 0.5Hz
-  - `SHT3X PERIODIC 1 HIGH` - Đo liên tục 1Hz  
-  - `SHT3X PERIODIC 2 HIGH` - Đo liên tục 2Hz
-  - `SHT3X PERIODIC 4 HIGH` - Đo liên tục 4Hz
-  - `SHT3X PERIODIC 10 HIGH` - Đo liên tục 10Hz
-  - `SHT3X ART` - Accelerated Response Time
-  - `SHT3X PERIODIC STOP` - Dừng đo liên tục
-  - `SHT3X HEATER ENABLE` - Bật heater
-  - `SHT3X HEATER DISABLE` - Tắt heater
+### 1. Control the SHT3X Sensor via MQTT
 
-### 2. Nhận dữ liệu sensor từ STM32
-STM32 gửi dữ liệu với format: `[MODE] [TEMPERATURE] [HUMIDITY]`
+* **Command topic:** `esp32/sensor/sht3x/command`
+* **Supported commands:**
 
-Ví dụ:
+  * `SHT3X SINGLE HIGH` — One-shot measurement, high repeatability
+  * `SHT3X PERIODIC 0.5 HIGH` — Continuous measurement at 0.5 Hz
+  * `SHT3X PERIODIC 1 HIGH` — Continuous measurement at 1 Hz
+  * `SHT3X PERIODIC 2 HIGH` — Continuous measurement at 2 Hz
+  * `SHT3X PERIODIC 4 HIGH` — Continuous measurement at 4 Hz
+  * `SHT3X PERIODIC 10 HIGH` — Continuous measurement at 10 Hz
+  * `SHT3X ART` — Accelerated Response Time
+  * `SHT3X PERIODIC STOP` — Stop periodic measurements
+  * `SHT3X HEATER ENABLE` — Enable the on‑chip heater
+  * `SHT3X HEATER DISABLE` — Disable the on‑chip heater
+
+### 2. Receive sensor data from STM32
+
+The STM32 sends lines in the format: `[MODE] [TEMPERATURE] [HUMIDITY]`
+
+**Examples:**
+
 ```
 PERIODIC 27.82 85.65
 SINGLE 27.85 85.69
 ```
 
-ESP32 sẽ parse và publish lên các topic tương ứng:
-- **Single mode**: 
-  - `esp32/sensor/sht3x/single/temperature`
-  - `esp32/sensor/sht3x/single/humidity`
-- **Periodic mode**:
-  - `esp32/sensor/sht3x/periodic/temperature` 
-  - `esp32/sensor/sht3x/periodic/humidity`
+The ESP32 parses and publishes to the following topics:
 
-### 3. Điều khiển Relay
-- **Topic**: `esp32/control/relay`
-- **Lệnh hỗ trợ**: `ON`, `OFF`, `1`, `0`, `true`, `false`
-- ESP32 sẽ điều khiển GPIO để đóng/mở relay
+* **Single mode**
 
-### 4. Trạng thái hệ thống
-- **Topic**: `esp32/status`
-- Publish trạng thái kết nối, relay, và tình trạng hệ thống
+  * `esp32/sensor/sht3x/single/temperature`
+  * `esp32/sensor/sht3x/single/humidity`
+* **Periodic mode**
 
-## Cấu hình phần cứng
+  * `esp32/sensor/sht3x/periodic/temperature`
+  * `esp32/sensor/sht3x/periodic/humidity`
 
-### Kết nối UART với STM32
+### 3. Relay control
+
+* **Topic:** `esp32/control/relay`
+* **Accepted payloads:** `ON`, `OFF`, `1`, `0`, `true`, `false`
+* The ESP32 toggles a GPIO pin to switch the relay.
+
+### 4. System status
+
+* **Topic:** `esp32/status`
+* Publishes connectivity, relay state, and overall system status.
+
+---
+
+## Hardware Setup
+
+### UART connection to STM32
+
 ```
 ESP32          STM32
 TXD (GPIO17) → RXD
@@ -59,150 +72,184 @@ RXD (GPIO16) ← TXD
 GND          → GND
 ```
 
-### Kết nối Relay
+### Relay connection
+
 ```
 ESP32 GPIO18 → Relay Module IN
 ESP32 GND    → Relay Module GND
-ESP32 VCC    → Relay Module VCC (3.3V hoặc 5V)
+ESP32 VCC    → Relay Module VCC (3.3V or 5V)
 ```
 
-## Cấu hình phần mềm
+---
 
-### 1. Cấu hình MQTT Broker
+## Software Configuration
+
+### 1. Configure the MQTT broker
+
 ```bash
 idf.py menuconfig
 ```
-→ ESP32 MQTT5 Bridge Configuration → MQTT Broker Settings
-- Broker URL: `mqtt://your-broker-url`
-- Username: `your-username`
-- Password: `your-password`
-- Client ID: `ESP32_STM32_Bridge`
 
-### 2. Cấu hình UART
-→ ESP32 MQTT5 Bridge Configuration → STM32 Communication UART Configuration
-- Port: UART2 (default)
-- Baud Rate: 115200
-- TXD Pin: GPIO17
-- RXD Pin: GPIO16
+→ **ESP32 MQTT5 Bridge Configuration** → **MQTT Broker Settings**
 
-### 3. Cấu hình GPIO Relay
-→ ESP32 MQTT5 Bridge Configuration → Hardware Control Configuration
-- Relay GPIO: GPIO18 (default)
+* **Broker URL:** `mqtt://your-broker-url`
+* **Username:** `your-username`
+* **Password:** `your-password`
+* **Client ID:** `ESP32_STM32_Bridge`
 
-### 4. Cấu hình WiFi
-→ ESP32 MQTT5 Bridge Configuration → WiFi Connection Configuration
-- SSID: `your-wifi-ssid`
-- Password: `your-wifi-password`
+### 2. Configure UART
 
-## Biên dịch và nạp code
+→ **ESP32 MQTT5 Bridge Configuration** → **STM32 Communication UART Configuration**
+
+* **Port:** UART2 (default)
+* **Baud Rate:** 115200
+* **TXD Pin:** GPIO17
+* **RXD Pin:** GPIO16
+
+### 3. Configure the relay GPIO
+
+→ **ESP32 MQTT5 Bridge Configuration** → **Hardware Control Configuration**
+
+* **Relay GPIO:** GPIO18 (default)
+
+### 4. Configure Wi‑Fi
+
+→ **ESP32 MQTT5 Bridge Configuration** → **WiFi Connection Configuration**
+
+* **SSID:** `your-wifi-ssid`
+* **Password:** `your-wifi-password`
+
+---
+
+## Build and Flash
 
 ```bash
-# Cấu hình project
+# Configure the project
 idf.py menuconfig
 
-# Biên dịch
+# Build
 idf.py build
 
-# Nạp code
+# Flash
 idf.py flash
 
 # Monitor serial output
 idf.py monitor
 ```
 
-## Luồng hoạt động
+---
 
-### 1. Gửi lệnh SHT3X
+## Operation Flows
+
+### 1. Send an SHT3X command
+
 ```
-Web App → MQTT Publish "esp32/sensor/sht3x/command" → "SHT3X SINGLE HIGH"
+Web App → MQTT publish "esp32/sensor/sht3x/command" → "SHT3X SINGLE HIGH"
 ↓
-ESP32 nhận MQTT message
+ESP32 receives the MQTT message
 ↓
-ESP32 gửi qua UART → "SHT3X SINGLE HIGH\n"
+ESP32 sends over UART → "SHT3X SINGLE HIGH\n"
 ↓
-STM32 nhận và xử lý lệnh
+STM32 receives and executes the command
 ```
 
-### 2. Nhận dữ liệu sensor
+### 2. Receive sensor data
+
 ```
-STM32 đo sensor → gửi qua UART → "SINGLE 27.85 85.69\n"
+STM32 measures the sensor → sends over UART → "SINGLE 27.85 85.69\n"
 ↓
-ESP32 nhận và parse dữ liệu
+ESP32 receives and parses the line
 ↓
-ESP32 publish MQTT:
+ESP32 publishes MQTT:
 - Topic: "esp32/sensor/sht3x/single/temperature" → "27.85"
-- Topic: "esp32/sensor/sht3x/single/humidity" → "85.69"
+- Topic: "esp32/sensor/sht3x/single/humidity"    → "85.69"
 ↓
-Web App nhận dữ liệu qua MQTT Subscribe
+Web App receives data via MQTT subscribe
 ```
 
-### 3. Điều khiển Relay
+### 3. Control the relay
+
 ```
-Web App → MQTT Publish "esp32/control/relay" → "ON"
+Web App → MQTT publish "esp32/control/relay" → "ON"
 ↓
-ESP32 nhận lệnh
+ESP32 receives the command
 ↓
-ESP32 set GPIO18 = HIGH
+ESP32 sets GPIO18 = HIGH
 ↓
-ESP32 publish status → "esp32/status" → "relay:ON,status:ok"
+ESP32 publishes status → "esp32/status" → "relay:ON,status:ok"
 ```
+
+---
 
 ## Debugging
 
 ### Log levels
-Code đã cấu hình log verbose cho MQTT debugging. Để thay đổi:
+
+Verbose MQTT logging is enabled. To change:
+
 ```c
 esp_log_level_set("ESP32_MQTT5_BRIDGE", ESP_LOG_DEBUG);
 ```
 
-### Serial Monitor
-Sử dụng `idf.py monitor` để xem log real-time:
-- Kết nối MQTT
-- Nhận/gửi MQTT messages  
-- Giao tiếp UART với STM32
-- Trạng thái GPIO relay
+### Serial monitor
 
-### Kiểm tra UART
-Có thể sử dụng USB-TTL adapter kết nối với UART pins để monitor giao tiếp với STM32.
+Use `idf.py monitor` to view real‑time logs:
+
+* MQTT connection
+* Incoming/outgoing MQTT messages
+* UART communication with STM32
+* Relay GPIO status
+
+### Check UART
+
+You can attach a USB‑TTL adapter to the UART pins to monitor STM32 communication.
+
+---
 
 ## Troubleshooting
 
-### 1. ESP32 không kết nối WiFi
-- Kiểm tra SSID/Password trong menuconfig
-- Kiểm tra tín hiệu WiFi
-- Reset ESP32
+### 1. ESP32 does not connect to Wi‑Fi
 
-### 2. MQTT không kết nối
-- Kiểm tra broker URL, username, password
-- Kiểm tra network connectivity
-- Kiểm tra firewall settings
+* Verify SSID/password in **menuconfig**
+* Check Wi‑Fi signal quality
+* Reset/power‑cycle the ESP32
 
-### 3. Không nhận được dữ liệu từ STM32  
-- Kiểm tra kết nối UART (TX-RX cross-connect)
-- Kiểm tra baud rate match giữa ESP32 và STM32
-- Kiểm tra format dữ liệu từ STM32
+### 2. MQTT does not connect
 
-### 4. Relay không hoạt động
-- Kiểm tra GPIO pin configuration
-- Kiểm tra nguồn cấp cho relay module
-- Đo voltage tại GPIO pin khi ON/OFF
+* Verify broker URL, username, and password
+* Check network connectivity
+* Review firewall/NAT settings
 
-## Mở rộng
+### 3. No data received from STM32
 
-### Thêm sensor khác
-Có thể mở rộng để hỗ trợ thêm sensors bằng cách:
-1. Thêm topics mới trong code
-2. Cập nhật parser cho format dữ liệu mới
-3. Subscribe thêm command topics
+* Verify UART cross‑connection (ESP32 TX → STM32 RX and ESP32 RX ← STM32 TX)
+* Ensure both sides use the same baud rate
+* Confirm the STM32 output format
 
-### Bảo mật
-Để tăng cường bảo mật:
-1. Sử dụng MQTT over TLS (mqtts://)
-2. Implement authentication với certificates
-3. Encrypt sensitive data
+### 4. Relay does not switch
+
+* Check the GPIO pin configuration and direction
+* Verify relay module power supply
+* Measure GPIO voltage when toggled (ON/OFF)
+
+---
+
+## Extensions
+
+### Add more sensors
+
+1. Add new MQTT topics in the code
+2. Extend the UART parser for the new data format
+3. Subscribe to additional command topics as needed
+
+### Security
+
+1. Use MQTT over TLS (`mqtts://`)
+2. Implement certificate‑based authentication
+3. Encrypt sensitive payloads
 
 ### Performance
-Để tối ưu performance:
-1. Điều chỉnh MQTT keepalive và QoS
-2. Tối ưu buffer sizes
-3. Sử dụng FreeRTOS task priorities phù hợp
+
+1. Tune MQTT keepalive and QoS
+2. Optimize buffer sizes
+3. Use appropriate FreeRTOS task priorities
