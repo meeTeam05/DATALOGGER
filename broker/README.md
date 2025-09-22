@@ -1,4 +1,4 @@
-# broker/ — Mosquitto MQTT Broker (Quick README)
+Mosquitto MQTT Broker
 
 A minimal, copy‑friendly guide to run the broker for your datalogger.
 
