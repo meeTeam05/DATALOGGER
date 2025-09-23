@@ -187,4 +187,4 @@ SHT3X PERIODIC STOP
 
 ## License
 
-Provided AS‑IS unless a LICENSE file is present.
+MIT (or update as required).

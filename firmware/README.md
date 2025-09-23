@@ -253,3 +253,7 @@ You can attach a USB‑TTL adapter to the UART pins to monitor STM32 communicati
 1. Tune MQTT keepalive and QoS
 2. Optimize buffer sizes
 3. Use appropriate FreeRTOS task priorities
+
+## License
+
+MIT (or update as required).

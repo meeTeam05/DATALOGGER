@@ -354,3 +354,7 @@ SHT3X PERIODIC STOP
 * If you paste scripts quickly and see truncation, raise `RING_BUFFER_SIZE` or `BUFFER_UART`.
 * The dispatcher is **case‑sensitive** and requires exact token sequences (spaces normalized).
 * Periodic sampling cadence is controlled in `main.c` via `timeData` and the `next_fetch_ms` accumulator.
+
+## License
+
+MIT (or update as required).

@@ -229,3 +229,7 @@ echo "PERIODIC 26.1 67.8" > /dev/ttyUSB0
 * **Throughput:** Supports up to 10 Hz sensor data
 
 This architecture makes the bridge easy to maintain, extend, and debug!
+
+## License
+
+MIT (or update as required).
