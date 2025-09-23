@@ -1,17 +1,36 @@
 // Global variables
 let isPeriodic = false;
-let isSTM32On = false;
+let isDeviceOn = false;
+let isMqttConnected = false;
 let frameRate = 1; // Hz
-let intervalId = null;
 let temperatureData = [];
 let humidityData = [];
 let statusQueue = [];
 let maxDataPoints = 15;
 let maxStatusItems = 5;
+let mqttClient = null;
 
-// Current values for display (updated by both single and periodic)
-let currentTemp = 24.5;
-let currentHumi = 50.0;
+// Current values for display (updated only from MQTT)
+let currentTemp = 0.0;
+let currentHumi = 0.0;
+
+// MQTT Configuration - Set default credentials to match broker
+const MQTT_CONFIG = {
+    host: '127.0.0.1',
+    port: 8083,
+    path: '/mqtt',
+    username: 'DataLogger',             // Same as ESP32 uses
+    password: 'datalogger',             // Set password if needed
+    url: 'ws://127.0.0.1:8083/mqtt',
+    topics: {
+        command: "esp32/sensor/sht3x/command",
+        deviceControl: "esp32/control/relay",
+        periodicTemp: "esp32/sensor/sht3x/periodic/temperature",
+        periodicHumi: "esp32/sensor/sht3x/periodic/humidity",
+        singleTemp: "esp32/sensor/sht3x/single/temperature",
+        singleHumi: "esp32/sensor/sht3x/single/humidity"
+    }
+};
 
 // Chart configurations
 const chartTempConfig = {
@@ -70,7 +89,7 @@ const chartTempConfig = {
             }
         },
         animation: { 
-            duration: 200 // Faster animations
+            duration: 200
         }
     }
 };
@@ -139,12 +158,249 @@ const chartHumiConfig = {
 // Initialize charts
 let chart1, chart2;
 
-// Helper functions for MQTT data
-function pushTemperature(newTemp) {
+// Device validation function
+function validateDeviceState(operation) {
+    if (!isDeviceOn) {
+        addStatus(`[WARNING] Turn on device first`, 'WARNING');
+        return false;
+    }
+    if (!isMqttConnected) {
+        addStatus('MQTT not connected', 'ERROR');
+        return false;
+    }
+    return true;
+}
+
+// MQTT Functions
+function updateConnectionStatus(connected) {
+    isMqttConnected = connected;
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    
+    if (connected) {
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = 'MQTT Connected';
+        addStatus('MQTT broker connected', 'MQTT');
+    } else {
+        statusDot.className = 'status-dot disconnected';
+        statusText.textContent = 'MQTT Disconnected';
+        addStatus('MQTT broker disconnected', 'MQTT');
+        // Stop periodic mode if MQTT disconnected
+        if (isPeriodic) {
+            stopPeriodicMode();
+        }
+    }
+}
+
+function publishMQTT(topic, message) {
+    if (mqttClient && isMqttConnected) {
+        mqttClient.publish(topic, message, (err) => {
+            if (err) {
+                addStatus(`Publish failed: ${err.message}`, 'ERROR');
+            } else {
+                console.log(`Published to ${topic}: ${message}`);
+            }
+        });
+    } else {
+        addStatus('Cannot publish: MQTT not connected', 'ERROR');
+    }
+}
+
+function connectMQTT() {
+    try {
+        MQTT_CONFIG.url = `ws://${MQTT_CONFIG.host}:${MQTT_CONFIG.port}${MQTT_CONFIG.path}`;
+        
+        if (mqttClient) {
+            mqttClient.end(true);
+            mqttClient = null;
+        }
+        
+        addStatus('Connecting to MQTT...', 'MQTT');
+        
+        const connectOptions = {
+            clientId: 'WebClient_' + Math.random().toString(16).substring(2, 8),
+            reconnectPeriod: 2000,
+            clean: true,
+            connectTimeout: 10000,
+            keepalive: 30,
+            protocolVersion: 4,
+            protocolId: 'MQTT'
+        };
+        
+        // Always add username if configured (broker seems to require it)
+        if (MQTT_CONFIG.username) {
+            connectOptions.username = MQTT_CONFIG.username;
+            if (MQTT_CONFIG.password) {
+                connectOptions.password = MQTT_CONFIG.password;
+            }
+            console.log('Using credentials:', MQTT_CONFIG.username);
+        }
+        
+        console.log('Connecting to:', MQTT_CONFIG.url);
+        console.log('Options:', connectOptions);
+        
+        mqttClient = mqtt.connect(MQTT_CONFIG.url, connectOptions);
+
+        mqttClient.on('connect', (connack) => {
+            console.log('MQTT Connected:', connack);
+            updateConnectionStatus(true);
+            
+            const topics = [
+                MQTT_CONFIG.topics.periodicTemp,
+                MQTT_CONFIG.topics.periodicHumi,
+                MQTT_CONFIG.topics.singleTemp,
+                MQTT_CONFIG.topics.singleHumi
+            ];
+            
+            mqttClient.subscribe(topics, { qos: 0 }, (err) => {
+                if (err) {
+                    console.error('Subscribe error:', err);
+                    addStatus('MQTT subscribe failed: ' + err.message, 'ERROR');
+                } else {
+                    console.log('Subscribed to topics:', topics);
+                    addStatus('All topics subscribed successfully', 'MQTT');
+                }
+            });
+        });
+
+        mqttClient.on('reconnect', () => {
+            console.log('MQTT Reconnecting...');
+            addStatus('MQTT reconnecting...', 'MQTT');
+        });
+
+        mqttClient.on('error', (e) => {
+            console.error('MQTT Error:', e);
+            updateConnectionStatus(false);
+            
+            let errorMsg = 'Connection error';
+            if (e.code === 5) {
+                errorMsg = 'Not authorized - check broker settings';
+            } else if (e.code === 4) {
+                errorMsg = 'Bad username or password';
+            } else if (e.code === 2) {
+                errorMsg = 'Client identifier rejected';
+            } else if (e.message) {
+                errorMsg = e.message;
+            }
+            
+            addStatus('MQTT error: ' + errorMsg, 'ERROR');
+        });
+
+        mqttClient.on('offline', () => {
+            console.log('MQTT Offline');
+            updateConnectionStatus(false);
+            addStatus('MQTT broker offline', 'MQTT');
+        });
+
+        mqttClient.on('close', () => {
+            console.log('MQTT Connection closed');
+            updateConnectionStatus(false);
+        });
+
+        mqttClient.on('disconnect', (packet) => {
+            console.log('MQTT Disconnected:', packet);
+            updateConnectionStatus(false);
+            addStatus('MQTT disconnected by broker', 'MQTT');
+        });
+
+        mqttClient.on('message', (topic, payload) => {
+            console.log('MQTT Message:', topic, payload.toString());
+            
+            const text = payload.toString();
+            let val = parseFloat(text);
+            
+            // Support JSON format {"value": 26.4, "unit": "C"}
+            if (isNaN(val)) {
+                try {
+                    const obj = JSON.parse(text);
+                    if (obj && typeof obj.value !== 'undefined') {
+                        val = parseFloat(obj.value);
+                    }
+                } catch (e) {
+                    console.log('Failed to parse JSON:', text);
+                    return;
+                }
+            }
+            
+            if (!isNaN(val) && isFinite(val)) {
+                switch (topic) {
+                    case MQTT_CONFIG.topics.periodicTemp:
+                        addStatus(`Periodic temp: ${val}°C`, 'DATA');
+                        pushTemperature(val, true); // true indicates periodic data
+                        break;
+                    case MQTT_CONFIG.topics.periodicHumi:
+                        addStatus(`Periodic humi: ${val}%`, 'DATA');
+                        pushHumidity(val, true); // true indicates periodic data
+                        break;
+                    case MQTT_CONFIG.topics.singleTemp:
+                        addStatus(`Single temp: ${val}°C`, 'SINGLE');
+                        pushTemperature(val, false); // false indicates single reading
+                        break;
+                    case MQTT_CONFIG.topics.singleHumi:
+                        addStatus(`Single humi: ${val}%`, 'SINGLE');
+                        pushHumidity(val, false); // false indicates single reading
+                        break;
+                }
+            } else {
+                console.log('Invalid value received:', text);
+            }
+        });
+        
+    } catch (e) {
+        console.error('MQTT Init Error:', e);
+        updateConnectionStatus(false);
+        addStatus('MQTT init failed: ' + e.message, 'ERROR');
+    }
+}
+
+// Modal Functions
+function openModal() {
+    document.getElementById('mqttModal').style.display = 'flex';
+    document.getElementById('mqttIp').value = MQTT_CONFIG.host;
+    document.getElementById('mqttPort').value = MQTT_CONFIG.port;
+    document.getElementById('mqttPath').value = MQTT_CONFIG.path;
+    document.getElementById('mqttUser').value = MQTT_CONFIG.username;
+    document.getElementById('mqttPass').value = MQTT_CONFIG.password;
+}
+
+function closeModal() {
+    document.getElementById('mqttModal').style.display = 'none';
+}
+
+function saveAndConnect() {
+    const ip = document.getElementById('mqttIp').value.trim();
+    const port = document.getElementById('mqttPort').value.trim();
+    const path = document.getElementById('mqttPath').value.trim();
+    const username = document.getElementById('mqttUser').value.trim();
+    const password = document.getElementById('mqttPass').value.trim();
+    
+    if (!ip || !port) {
+        addStatus('Please enter valid IP and port', 'ERROR');
+        return;
+    }
+    
+    MQTT_CONFIG.host = ip;
+    MQTT_CONFIG.port = port;
+    MQTT_CONFIG.path = path || '/mqtt';
+    MQTT_CONFIG.username = username;
+    MQTT_CONFIG.password = password;
+    
+    closeModal();
+    addStatus(`Connecting to ${ip}:${port}${MQTT_CONFIG.path}...`, 'MQTT');
+    
+    if (username) {
+        addStatus(`Using authentication: ${username}`, 'MQTT');
+    }
+    
+    connectMQTT();
+}
+
+// Helper functions for MQTT data - Fixed to handle periodic vs single data
+function pushTemperature(newTemp, isPeriodic = false) {
     currentTemp = newTemp;
     updateCurrentDisplay();
     
-    // Only update chart if in periodic mode
+    // Only update chart if in periodic mode AND the data is from periodic source
     if (isPeriodic && chart1) {
         const timestamp = new Date().toLocaleTimeString('en-US', {
             hour12: false,
@@ -162,13 +418,21 @@ function pushTemperature(newTemp) {
         }
         chart1.update('none');
     }
+    
+    // Store data (for periodic only)
+    if (isPeriodic) {
+        temperatureData.push(newTemp);
+        if (temperatureData.length > maxDataPoints) {
+            temperatureData.shift();
+        }
+    }
 }
 
-function pushHumidity(newHumi) {
+function pushHumidity(newHumi, isPeriodic = false) {
     currentHumi = newHumi;
     updateCurrentDisplay();
     
-    // Only update chart if in periodic mode
+    // Only update chart if in periodic mode AND the data is from periodic source
     if (isPeriodic && chart2) {
         const timestamp = new Date().toLocaleTimeString('en-US', {
             hour12: false,
@@ -186,6 +450,14 @@ function pushHumidity(newHumi) {
         }
         chart2.update('none');
     }
+    
+    // Store data (for periodic only)
+    if (isPeriodic) {
+        humidityData.push(newHumi);
+        if (humidityData.length > maxDataPoints) {
+            humidityData.shift();
+        }
+    }
 }
 
 // Update combined display
@@ -194,28 +466,11 @@ function updateCurrentDisplay() {
     if (el) {
         el.textContent = `Current: ${currentTemp}°C & ${currentHumi}% RH`;
         el.classList.add('pulse');
-        setTimeout(() => el.classList.remove('pulse'), 1000);
+        setTimeout(() => el.classList.remove('pulse'), 800);
     }
 }
 
-// Simulate sensor readings with more realistic data
-function generateTemperature() {
-    const baseTemp = 24.5;
-    const variation = (Math.random() - 0.5) * 1.5; // Reduced variation
-    const trend = Math.sin(Date.now() / 30000) * 2; // Slower trend
-    const noise = (Math.random() - 0.5) * 0.3; // Small noise
-    return Math.round((baseTemp + variation + trend + noise) * 10) / 10;
-}
-
-function generateHumidity() {
-    const baseHumi = 50.0;
-    const variation = (Math.random() - 0.5) * 3;
-    const trend = Math.sin(Date.now() / 45000) * 8;
-    const noise = (Math.random() - 0.5) * 0.5;
-    return Math.round((baseHumi + variation + trend + noise) * 10) / 10;
-}
-
-// Status management with better performance
+// Status management with better performance and proper color coding
 function addStatus(message, type = 'INFO') {
     const timestamp = new Date().toLocaleTimeString('en-US', {
         hour12: false,
@@ -223,142 +478,101 @@ function addStatus(message, type = 'INFO') {
         minute: '2-digit',
         second: '2-digit'
     });
-    const statusItem = `[${type}] ${timestamp}: ${message}`;
+    const statusItem = {
+        text: `[${type}] ${timestamp}: ${message}`,
+        type: type
+    };
     
     statusQueue.push(statusItem);
     if (statusQueue.length > maxStatusItems) {
         statusQueue.shift();
     }
     
-    // Throttled update
-    if (!addStatus.throttled) {
-        addStatus.throttled = true;
-        requestAnimationFrame(() => {
-            updateStatusDisplay();
-            addStatus.throttled = false;
-        });
-    }
+    // Throttled update for performance
+    requestAnimationFrame(updateStatusDisplay);
 }
 
 function updateStatusDisplay() {
     const statusDisplay = document.getElementById('statusDisplay');
     if (statusDisplay) {
-        statusDisplay.innerHTML = statusQueue.map(item => 
-            `<div class="status-item">${item}</div>`
-        ).join('');
+        statusDisplay.innerHTML = statusQueue.map(item => {
+            let className = 'status-item';
+            if (item.type === 'WARNING') {
+                className += ' status-warning';
+            } else if (item.type === 'ERROR') {
+                className += ' status-error';
+            } else if (item.type === 'MQTT') {
+                className += ' status-mqtt';
+            }
+            return `<div class="${className}">${item.text}</div>`;
+        }).join('');
         statusDisplay.scrollTop = statusDisplay.scrollHeight;
     }
 }
 
-// Data update function (for periodic mode)
-function updateDataPeriodic() {
-    const newTemp = generateTemperature();
-    const newHumi = generateHumidity();
-    const timestamp = new Date().toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    });
-    
-    // Update current values and display
-    currentTemp = newTemp;
-    currentHumi = newHumi;
-    updateCurrentDisplay();
-
-    // Update data arrays
-    temperatureData.push(newTemp);
-    if (temperatureData.length > maxDataPoints) {
-        temperatureData.shift();
-    }
-    
-    humidityData.push(newHumi);
-    if (humidityData.length > maxDataPoints) {
-        humidityData.shift();
-    }
-
-    // Update charts (only in periodic mode)
-    if (chart1) {
-        chart1.data.labels.push(timestamp);
-        chart1.data.datasets[0].data.push(newTemp);
-        if (chart1.data.labels.length > maxDataPoints) {
-            chart1.data.labels.shift();
-            chart1.data.datasets[0].data.shift();
-        }
-        chart1.update('none');
-    }
-
-    if (chart2) {
-        chart2.data.labels.push(timestamp);
-        chart2.data.datasets[0].data.push(newHumi);
-        if (chart2.data.labels.length > maxDataPoints) {
-            chart2.data.labels.shift();
-            chart2.data.datasets[0].data.shift();
-        }
-        chart2.update('none');
-    }
-
-    // Random status messages (reduced frequency)
-    if (Math.random() < 0.08) {
-        const messages = [
-            `T: ${newTemp}°C, H: ${newHumi}%`,
-            'SHT31 OK',
-            'Data stable',
-            `${frameRate}Hz active`
-        ];
-        addStatus(messages[Math.floor(Math.random() * messages.length)]);
-    }
-}
-
-// Single read function (only updates display, not charts)
-function updateDataSingle() {
-    const newTemp = generateTemperature();
-    const newHumi = generateHumidity();
-    
-    // Update current values and display only
-    currentTemp = newTemp;
-    currentHumi = newHumi;
-    updateCurrentDisplay();
-    
-    addStatus(`Single: ${newTemp}°C, ${newHumi}%`, 'SINGLE');
-}
-
-// Control functions
+// Control functions (MQTT commands only, no simulation)
 function startPeriodicMode() {
-    if (intervalId) clearInterval(intervalId);
+    if (!validateDeviceState('periodic mode')) return;
     
-    if (isSTM32On) {
-        isPeriodic = true;
-        const intervalMs = 1000 / frameRate;
-        intervalId = setInterval(updateDataPeriodic, intervalMs);
-        addStatus(`Periodic ${frameRate}Hz started`, 'START');
-        
-        document.getElementById('stopBtn').style.display = 'block';
-        document.getElementById('periodicBtn').style.display = 'none';
-        
-        updateDataPeriodic();
-    } else {
-        addStatus('STM32 must be ON', 'ERROR');
-    }
+    const command = `SHT3X PERIODIC ${frameRate} HIGH`;
+    publishMQTT(MQTT_CONFIG.topics.command, command);
+    
+    isPeriodic = true;
+    document.getElementById('stopBtn').style.display = 'block';
+    document.getElementById('periodicBtn').style.display = 'none';
+    
+    addStatus(`Started periodic mode at ${frameRate} Hz`, 'START');
 }
 
 function stopPeriodicMode() {
-    if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-        isPeriodic = false;
-        addStatus('Periodic stopped', 'STOP');
+    if (!isMqttConnected) {
+        addStatus('MQTT not connected', 'ERROR');
+        return;
     }
     
+    publishMQTT(MQTT_CONFIG.topics.command, 'SHT3X PERIODIC STOP');
+    
+    isPeriodic = false;
     document.getElementById('stopBtn').style.display = 'none';
     document.getElementById('periodicBtn').style.display = 'block';
+    
+    addStatus('Stopped periodic mode', 'STOP');
 }
 
 function singleRead() {
-    if (isSTM32On) {
-        updateDataSingle();
+    if (!validateDeviceState('single read')) return;
+    
+    publishMQTT(MQTT_CONFIG.topics.command, 'SHT3X SINGLE HIGH');
+    addStatus('Single read command sent', 'SINGLE');
+}
+
+// Fixed device control function
+function toggleDevice() {
+    if (!isMqttConnected) {
+        addStatus('MQTT not connected', 'ERROR');
+        return;
+    }
+    
+    // Send the appropriate command based on current state
+    const command = isDeviceOn ? 'RELAY OFF' : 'RELAY ON';
+    publishMQTT(MQTT_CONFIG.topics.deviceControl, command);
+    addStatus(`Device command sent: ${command}`, 'POWER');
+    
+    // Toggle the state
+    isDeviceOn = !isDeviceOn;
+    const deviceBtn = document.getElementById('deviceBtn');
+    if (deviceBtn) {
+        deviceBtn.textContent = isDeviceOn ? 'DEVICE ON' : 'DEVICE OFF';
+        deviceBtn.classList.toggle('on');
+    }
+    
+    if (isDeviceOn) {
+        addStatus('Device control: ON', 'POWER');
     } else {
-        addStatus('STM32 must be ON', 'ERROR');
+        addStatus('Device control: OFF', 'POWER');
+        if (isPeriodic) {
+            stopPeriodicMode();
+        }
     }
 }
 
@@ -377,6 +591,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (ctx1) chart1 = new Chart(ctx1.getContext('2d'), chartTempConfig);
     if (ctx2) chart2 = new Chart(ctx2.getContext('2d'), chartHumiConfig);
     
+    // MQTT Modal event listeners
+    document.getElementById('settingsBtn').addEventListener('click', openModal);
+    document.getElementById('cancelBtn').addEventListener('click', closeModal);
+    document.getElementById('saveBtn').addEventListener('click', saveAndConnect);
+    
+    // Close modal when clicking outside
+    document.getElementById('mqttModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+    
     // Frame rate selector
     document.querySelectorAll('.frame-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -386,7 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
             frameRate = parseFloat(this.dataset.rate);
             addStatus(`Frame rate: ${frameRate}Hz`);
             
-            if (isPeriodic && isSTM32On) {
+            if (isPeriodic && isDeviceOn) {
                 startPeriodicMode();
             }
         });
@@ -396,27 +620,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const periodicBtn = document.getElementById('periodicBtn');
     const stopBtn = document.getElementById('stopBtn');
     const singleBtn = document.getElementById('singleBtn');
-    const stm32Btn = document.getElementById('stm32Btn');
+    const deviceBtn = document.getElementById('deviceBtn');
     
     if (periodicBtn) periodicBtn.addEventListener('click', startPeriodicMode);
     if (stopBtn) stopBtn.addEventListener('click', stopPeriodicMode);
     if (singleBtn) singleBtn.addEventListener('click', singleRead);
-    
-    // STM32 button
-    if (stm32Btn) {
-        stm32Btn.addEventListener('click', function() {
-            isSTM32On = !isSTM32On;
-            this.textContent = isSTM32On ? 'STM32 ON' : 'STM32 OFF';
-            this.classList.toggle('on');
-            
-            if (isSTM32On) {
-                addStatus('STM32 ON', 'POWER');
-            } else {
-                addStatus('STM32 OFF', 'POWER');
-                stopPeriodicMode();
-            }
-        });
-    }
+    if (deviceBtn) deviceBtn.addEventListener('click', toggleDevice);
     
     // Window resize handler
     window.addEventListener('resize', handleResize);
@@ -424,54 +633,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize with demo data
     setTimeout(() => {
         addStatus('SHT31 initialized');
-        addStatus('Calibration OK');
-        addStatus('Ready for monitoring');
+        addStatus('System ready');
+        addStatus('[WARNING] Turn on device first', 'WARNING');
+        updateConnectionStatus(false);
     }, 500);
+    
+    // Try to connect MQTT on load
+    setTimeout(() => {
+        connectMQTT();
+    }, 1000);
 });
-
-// MQTT Configuration (uncomment and configure when ready)
-/*
-const MQTT_URL = "ws://localhost:8083/mqtt";
-const TOPIC_TEMP = "esp32/sht31/temperature";
-const TOPIC_HUMI = "esp32/sht31/humidity";
-
-try {
-    const client = mqtt.connect(MQTT_URL, {
-        reconnectPeriod: 2000,
-        clean: true
-    });
-
-    client.on('connect', () => {
-        addStatus('MQTT connected', 'MQTT');
-        client.subscribe([TOPIC_TEMP, TOPIC_HUMI], (err) => {
-            if (err) addStatus('Subscribe failed', 'ERROR');
-            else addStatus('MQTT subscribed', 'MQTT');
-        });
-    });
-
-    client.on('reconnect', () => addStatus('MQTT reconnecting', 'MQTT'));
-    client.on('error', (e) => addStatus('MQTT error: ' + e.message, 'ERROR'));
-
-    client.on('message', (topic, payload) => {
-        const text = payload.toString();
-        let val = parseFloat(text);
-        
-        // Support JSON format {"value": 26.4}
-        if (isNaN(val)) {
-            try {
-                const obj = JSON.parse(text);
-                if (obj && typeof obj.value !== 'undefined') {
-                    val = parseFloat(obj.value);
-                }
-            } catch (_) {}
-        }
-        
-        if (!isNaN(val)) {
-            if (topic === TOPIC_TEMP) pushTemperature(val);
-            if (topic === TOPIC_HUMI) pushHumidity(val);
-        }
-    });
-} catch (e) {
-    addStatus('MQTT init failed: ' + e.message, 'ERROR');
-}
-*/
