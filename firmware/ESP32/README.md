@@ -6,7 +6,7 @@
 ESP32/
 ├── main/
 │   ├── app_main.c              # Main application file
-│   └── CMakeLists.txt          # Main component build config
+│   ├── CMakeLists.txt          # Main component build config
 │   └── Kconfig.projbuild           # Project configuration
 ├── components/
 │   ├── ring_buffer/            # Ring buffer library
