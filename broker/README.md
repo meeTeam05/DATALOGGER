@@ -148,3 +148,6 @@ ws://<host>:8083
 docker rm -f datalogger-broker 2>/dev/null || true && \
 rm -rf broker/data/* broker/log/*
 ```
+## License
+
+MIT (or update as required).
