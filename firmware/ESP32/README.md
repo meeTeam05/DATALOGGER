@@ -7,6 +7,7 @@ ESP32/
 ├── main/
 │   ├── app_main.c              # Main application file
 │   └── CMakeLists.txt          # Main component build config
+│   └── Kconfig.projbuild           # Project configuration
 ├── components/
 │   ├── ring_buffer/            # Ring buffer library
 │   │   ├── ring_buffer.h
@@ -28,7 +29,6 @@ ESP32/
 │       ├── sensor_parser.h
 │       ├── sensor_parser.c
 │       └── CMakeLists.txt
-├── Kconfig.projbuild           # Project configuration
 ├── CMakeLists.txt              # Root build config
 └── README.md                   # Project documentation
 ```
