@@ -3,7 +3,7 @@
 ## 📁 Project Directory Structure
 
 ```
-esp32_mqtt_bridge/
+ESP32/
 ├── main/
 │   ├── app_main.c              # Main application file
 │   └── CMakeLists.txt          # Main component build config
