@@ -9,28 +9,23 @@ ESP32/
 │   └── CMakeLists.txt          # Main component build config
 ├── components/
 │   ├── ring_buffer/            # Ring buffer library
-│   │   ├── include/
-│   │   │   └── ring_buffer.h
+│   │   ├── ring_buffer.h
 │   │   ├── ring_buffer.c
 │   │   └── CMakeLists.txt
 │   ├── stm32_uart/             # STM32 UART communication
-│   │   ├── include/
-│   │   │   └── stm32_uart.h
+│   │   ├── stm32_uart.h
 │   │   ├── stm32_uart.c
 │   │   └── CMakeLists.txt
 │   ├── mqtt_handler/           # MQTT5 client wrapper
-│   │   ├── include/
-│   │   │   └── mqtt_handler.h
+│   │   ├── mqtt_handler.h
 │   │   ├── mqtt_handler.c
 │   │   └── CMakeLists.txt
 │   ├── relay_control/          # Relay control module
-│   │   ├── include/
-│   │   │   └── relay_control.h
+│   │   ├── relay_control.h
 │   │   ├── relay_control.c
 │   │   └── CMakeLists.txt
 │   └── sensor_parser/          # SHT3X data parser
-│       ├── include/
-│       │   └── sensor_parser.h
+│       ├── sensor_parser.h
 │       ├── sensor_parser.c
 │       └── CMakeLists.txt
 ├── Kconfig.projbuild           # Project configuration
