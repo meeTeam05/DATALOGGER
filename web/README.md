@@ -1,74 +1,300 @@
-# Web Dashboard
+# Web Monitor
 
-A lightweight, real‑time dashboard to monitor temperature and humidity from the SHT31 sensor. Ships with a data **simulator for demo** and **hooks for MQTT/WebSocket** when connecting to a live device.
+## Application Overview
+Your SHT31 monitoring dashboard is a client-side web application that:
+- Connects to MQTT brokers via WebSocket (default: ws://127.0.0.1:8083/mqtt)
+- Displays real-time temperature/humidity data with Chart.js
+- Controls ESP32-based sensor devices
+- Requires no server-side processing (pure static web app)
 
-## Structure
+## 🚀 Deployment Strategy Options
 
+### 1. Local Network Deployment (Recommended for IoT)
+
+**Best for:** Home automation, office monitoring, local IoT networks
+
+**Deployment Steps:**
+- **Simple HTTP Server:** Use Python's built-in server or Node.js `http-server`
+  ```bash
+  # Python approach
+  python -m http.server 8080
+  
+  # Node.js approach  
+  npx http-server -p 8080
+  ```
+- **Apache/Nginx:** Deploy on local web server
+- **Access:** `http://[local-ip]:8080`
+
+**Pros:** Direct MQTT access, no firewall issues, fast local communication
+**Cons:** Limited to local network access
+
+### 2. Cloud Static Hosting
+
+**Best for:** Remote monitoring, multiple location access, professional deployments
+
+#### Option A: GitHub Pages
+```bash
+1. Create GitHub repository
+2. Upload files to repo
+3. Enable GitHub Pages in Settings
+4. Access via https://yourusername.github.io/repo-name
 ```
-web/
-├── index.html   # Single‑file app: UI + inline CSS + inline JS + CDN libs
-├── style.css    # (Optional) External styles if you choose to extract from index.html
-└── script.js    # (Optional) External JS if you choose to extract from index.html
+
+#### Option B: Netlify
+- Drag & drop deployment
+- Automatic SSL certificates
+- Custom domain support
+- Deploy via: https://app.netlify.com/drop
+
+#### Option C: Vercel
+```bash
+npx vercel --prod
 ```
 
-> Note: `index.html` runs standalone. Use `style.css`/`script.js` only if you refactor to external files.
+#### Option D: AWS S3 + CloudFront
+- S3 bucket for static hosting
+- CloudFront for CDN distribution
+- Route 53 for custom domains
 
-## Features
+**Cloud Hosting Considerations:**
+- MQTT broker must have public WebSocket endpoint
+- Configure CORS for MQTT broker
+- Update MQTT_CONFIG in script.js for public IP
 
-* Live readouts: `Current: <°C> & <RH>%`
-* Two real‑time charts (Chart.js): Temperature 🌡️ and Humidity 💧
-* Frame rate selector: `0.5 / 1 / 2 / 4 / 10 Hz`
-* Modes: `Periodic / Stop / Single Read`
-* `DEVICE ON/OFF` toggle (UI only by default)
-* Compact Status log (FIFO style)
+### 3. Enterprise/Production Deployment
 
-## Requirements
+**Best for:** Industrial monitoring, mission-critical applications
 
-* Modern browser (Chrome/Edge/Firefox)
-* Internet access for CDNs: Chart.js and MQTT (unpkg)
-* (When using real data) A broker with **WebSocket** support, e.g. `ws://<host>:8083/mqtt`
+#### Containerized Deployment
+```dockerfile
+# Dockerfile
+FROM nginx:alpine
+COPY . /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80
+```
 
-## Quick Start (Demo / Simulator)
+```bash
+# Build and run
+docker build -t sht31-monitor .
+docker run -p 8080:80 sht31-monitor
+```
 
-1. Open `web/index.html` directly in your browser.
-2. Click **DEVICE ON** → choose **Periodic** to stream simulated data per selected frame rate.
-3. **Single Read** updates the current value without adding to the charts.
+#### Kubernetes Deployment
+```yaml
+# k8s-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sht31-monitor
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sht31-monitor
+  template:
+    metadata:
+      labels:
+        app: sht31-monitor
+    spec:
+      containers:
+      - name: sht31-monitor
+        image: sht31-monitor:latest
+        ports:
+        - containerPort: 80
+```
 
-## Connect to MQTT (Live Device)
+### 4. Mobile-First PWA Deployment
 
-MQTT wiring is prepared in JS (commented). To enable it:
+**Convert to Progressive Web App:**
 
-1. Un‑comment and set the MQTT config:
+1. **Add manifest.json:**
+```json
+{
+  "name": "SHT31 Temperature Monitor",
+  "short_name": "SHT31Monitor",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#667eea",
+  "theme_color": "#667eea",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
+```
 
-   * `MQTT_URL = "ws://<broker>:<ws-port>/mqtt"`
-   * `TOPIC_TEMP = "esp32/sht31/temperature"`
-   * `TOPIC_HUMI = "esp32/sht31/humidity"`
-2. Ensure the broker exposes a WebSocket listener (e.g., Mosquitto on `8083`).
-3. Supported payloads (auto‑parsed):
+2. **Add service worker for offline support**
+3. **Deploy with HTTPS requirement**
 
-   * Plain number string, e.g., `"26.4"`
-   * JSON object, e.g., `{ "value": 26.4 }`
+## 🔧 Configuration Management
 
-## Customization
+### Environment-Based Configuration
 
-* Max points kept on charts: `maxDataPoints = 15`
-* Max status lines shown: `maxStatusItems = 5`
-* Update cadence in **Periodic** mode = selected **frameRate (Hz)**
-* Chart smoothing/appearance: adjust Chart.js dataset/axis options
+**Development:**
+```javascript
+const MQTT_CONFIG = {
+    host: '127.0.0.1',
+    port: 8083,
+    path: '/mqtt',
+    username: 'DataLogger',
+    password: 'development'
+};
+```
 
-## Real Device Controls
+**Production:**
+```javascript
+const MQTT_CONFIG = {
+    host: 'your-mqtt-broker.com',
+    port: 443,
+    path: '/mqtt',
+    username: 'ProductionUser',
+    password: process.env.MQTT_PASSWORD // Use environment variables
+};
+```
 
-* Buttons `DEVICE ON/OFF`, `Periodic/Stop/Single` are **UI only** by default.
-* To control hardware, map these actions to **MQTT publish** commands per your protocol (e.g., send `SHT3X PERIODIC 1 HIGH`, or a JSON control message).
+### Dynamic Configuration
+Create a `config.js` that loads different settings based on hostname:
 
-## Build / Deploy
+```javascript
+function getMQTTConfig() {
+    const hostname = window.location.hostname;
+    
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return { host: '127.0.0.1', port: 8083, path: '/mqtt' };
+    } else if (hostname.includes('staging')) {
+        return { host: 'staging-mqtt.yourdomain.com', port: 443, path: '/mqtt' };
+    } else {
+        return { host: 'prod-mqtt.yourdomain.com', port: 443, path: '/mqtt' };
+    }
+}
+```
 
-This is a **static site**:
+## 🔐 Security Considerations
 
-* Open from file system, or serve via any static host (Nginx/Apache/GitHub Pages/Vercel).
-* For local dev, **VS Code → Live Server** is convenient for auto‑reload.
+### MQTT Security
+- **TLS/SSL:** Use `wss://` instead of `ws://` for production
+- **Authentication:** Configure strong MQTT broker credentials
+- **ACL:** Restrict topic access per user/device
+- **VPN:** Consider VPN access for sensitive deployments
 
-## Notes
+### Web Application Security
+- **HTTPS Only:** Force SSL for production deployments
+- **CSP Headers:** Implement Content Security Policy
+- **CORS:** Configure proper CORS settings on MQTT broker
+- **Input Validation:** Validate all MQTT message inputs
 
-* For demos: keep the simulator enabled.
-* For production: disable the simulator, enable MQTT, and review chart/log limits as needed.
+## 🌐 Network Architecture Options
+
+### Option 1: Direct MQTT Connection
+```
+[Web App] ←→ [MQTT Broker] ←→ [ESP32 Devices]
+```
+
+### Option 2: API Gateway Pattern
+```
+[Web App] ←→ [API Gateway] ←→ [MQTT Broker] ←→ [ESP32 Devices]
+```
+
+### Option 3: Cloud IoT Platform
+```
+[Web App] ←→ [AWS IoT/Azure IoT] ←→ [ESP32 Devices]
+```
+
+## 📊 Monitoring & Analytics
+
+### Application Monitoring
+- **Error Tracking:** Implement error logging for MQTT failures
+- **Performance:** Monitor chart rendering performance
+- **Uptime:** Track MQTT connection reliability
+
+### Usage Analytics
+```javascript
+// Add to script.js
+function trackEvent(action, label) {
+    // Google Analytics or custom analytics
+    gtag('event', action, {
+        'event_category': 'SHT31Monitor',
+        'event_label': label
+    });
+}
+```
+
+## 🔄 CI/CD Pipeline
+
+### GitHub Actions Example
+```yaml
+name: Deploy SHT31 Monitor
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Deploy to Netlify
+      uses: nwtgck/actions-netlify@v1.2
+      with:
+        publish-dir: './dist'
+        production-branch: main
+      env:
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+```
+
+## 🚨 Troubleshooting Deployment Issues
+
+### Common Issues & Solutions
+
+1. **MQTT Connection Failed**
+   - Check WebSocket port is open (8083)
+   - Verify MQTT broker supports WebSockets
+   - Confirm credentials match broker configuration
+
+2. **CORS Errors**
+   - Configure MQTT broker to allow web origin
+   - Use same protocol (http/https) for web app and broker
+
+3. **Chart Not Loading**
+   - Verify Chart.js CDN is accessible
+   - Check browser console for JavaScript errors
+   - Ensure canvas elements exist before chart initialization
+
+4. **Mobile Display Issues**
+   - Test responsive CSS media queries
+   - Verify touch interactions work
+   - Check viewport meta tag is present
+
+## 📱 Mobile App Alternative
+
+Consider converting to a mobile app using:
+- **Cordova/PhoneGap:** Wrap existing web app
+- **React Native:** Rebuild with native MQTT libraries
+- **Flutter:** Cross-platform native development
+- **Ionic:** Hybrid mobile framework
+
+## 🎯 Recommended Deployment Path
+
+**For Development:**
+1. Local HTTP server with local MQTT broker
+
+**For Production:**
+1. **Small Scale:** Netlify + cloud MQTT service
+2. **Enterprise:** Docker + Kubernetes + managed IoT platform
+3. **Mobile-First:** PWA deployment with offline support
+
+**Next Steps:**
+1. Choose your deployment target
+2. Configure MQTT broker for your environment
+3. Update MQTT_CONFIG in script.js
+4. Test end-to-end functionality
+5. Implement monitoring and security measures
+
+## License
+
+MIT (or update as required).
