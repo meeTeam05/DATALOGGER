@@ -1,87 +1,74 @@
 # Web Dashboard
 
-A minimal web dashboard via MQTT over WebSocket. Includes live charts, current readings and a relay toggle.
+A lightweight, real‑time dashboard to monitor temperature and humidity from the SHT31 sensor. Ships with a data **simulator for demo** and **hooks for MQTT/WebSocket** when connecting to a live device.
 
----
+## Structure
 
-## Files
+```
+web/
+├── index.html   # Single‑file app: UI + inline CSS + inline JS + CDN libs
+├── style.css    # (Optional) External styles if you choose to extract from index.html
+└── script.js    # (Optional) External JS if you choose to extract from index.html
+```
 
-* **index.html** – Self‑contained dashboard (UI, logic). Loads **Chart.js** and **mqtt.js** from CDNs and contains inline CSS/JS.
-* **script.js** – Optional demo logic that generates fake data (no MQTT) for quick UI testing.
-* **style.css** – Optional CSS for the demo setup.
+> Note: `index.html` runs standalone. Use `style.css`/`script.js` only if you refactor to external files.
 
-> Use `index.html` for the real MQTT dashboard. `script.js`/`style.css` are for a standalone demo and are not imported by `index.html` by default.
+## Features
 
----
+* Live readouts: `Current: <°C> & <RH>%`
+* Two real‑time charts (Chart.js): Temperature 🌡️ and Humidity 💧
+* Frame rate selector: `0.5 / 1 / 2 / 4 / 10 Hz`
+* Modes: `Periodic / Stop / Single Read`
+* `DEVICE ON/OFF` toggle (UI only by default)
+* Compact Status log (FIFO style)
 
-## Quick Start
+## Requirements
 
-1. **Configure MQTT** in `index.html` (look for the config block):
+* Modern browser (Chrome/Edge/Firefox)
+* Internet access for CDNs: Chart.js and MQTT (unpkg)
+* (When using real data) A broker with **WebSocket** support, e.g. `ws://<host>:8083/mqtt`
 
-   * `broker`: WebSocket URL of your broker (e.g., `ws://<host>:8083/mqtt` or `wss://...` on HTTPS)
-   * `username`, `password`
-   * topics (see below)
-2. **Serve the page** with any static server (recommended):
+## Quick Start (Demo / Simulator)
 
-   ```bash
-   python -m http.server 8080
-   # then open http://localhost:8080/index.html
-   ```
-3. Ensure your broker exposes **WebSocket** and CORS is allowed for your site.
+1. Open `web/index.html` directly in your browser.
+2. Click **DEVICE ON** → choose **Periodic** to stream simulated data per selected frame rate.
+3. **Single Read** updates the current value without adding to the charts.
 
----
+## Connect to MQTT (Live Device)
 
-## MQTT Topics (defaults used by the dashboard)
+MQTT wiring is prepared in JS (commented). To enable it:
 
-* **Publish (commands)**
+1. Un‑comment and set the MQTT config:
 
-  * `esp32/sensor/sht3x/command` – send SHT3X commands
-  * `esp32/control/relay` – control the relay
-* **Subscribe (data)**
+   * `MQTT_URL = "ws://<broker>:<ws-port>/mqtt"`
+   * `TOPIC_TEMP = "esp32/sht31/temperature"`
+   * `TOPIC_HUMI = "esp32/sht31/humidity"`
+2. Ensure the broker exposes a WebSocket listener (e.g., Mosquitto on `8083`).
+3. Supported payloads (auto‑parsed):
 
-  * `esp32/sensor/sht3x/periodic/temperature`
-  * `esp32/sensor/sht3x/periodic/humidity`
-  * `esp32/sensor/sht3x/single/temperature`
-  * `esp32/sensor/sht3x/single/humidity`
+   * Plain number string, e.g., `"26.4"`
+   * JSON object, e.g., `{ "value": 26.4 }`
 
----
+## Customization
 
-## Commands sent from the UI
+* Max points kept on charts: `maxDataPoints = 15`
+* Max status lines shown: `maxStatusItems = 5`
+* Update cadence in **Periodic** mode = selected **frameRate (Hz)**
+* Chart smoothing/appearance: adjust Chart.js dataset/axis options
 
-* **Periodic measurements**
+## Real Device Controls
 
-  * `SHT3X PERIODIC <0.5|1|2|4|10> <HIGH|MEDIUM|LOW>`
-  * Stop periodic: `SHT3X PERIODIC STOP`
-* **Single measurement**
+* Buttons `DEVICE ON/OFF`, `Periodic/Stop/Single` are **UI only** by default.
+* To control hardware, map these actions to **MQTT publish** commands per your protocol (e.g., send `SHT3X PERIODIC 1 HIGH`, or a JSON control message).
 
-  * `SHT3X SINGLE <HIGH|MEDIUM|LOW>`
-* **Relay control**
+## Build / Deploy
 
-  * `RELAY ON` / `RELAY OFF`
+This is a **static site**:
 
----
+* Open from file system, or serve via any static host (Nginx/Apache/GitHub Pages/Vercel).
+* For local dev, **VS Code → Live Server** is convenient for auto‑reload.
 
-## UI Controls
+## Notes
 
-* **Frame Rate (Hz):** sampling rate for periodic mode
-* **Periodic / Stop:** start/stop periodic streaming and live chart updates
-* **Single Read:** one‑shot measurement
-* **Relay ON/OFF:** toggle and display current relay state
-* **Live Charts & Current Values:** temperature and humidity in real time
-
----
-
-## Demo Mode (optional)
-
-If you need a no‑MQTT demo:
-
-* Create a simple HTML page that includes `script.js` and `style.css`, and the required DOM elements (charts, buttons, status labels) expected by the script.
-* This simulates data to validate the UI and charts without a broker.
-
----
-
-## Notes / Troubleshooting
-
-* Use **`wss://`** when your site is served over HTTPS (avoid mixed content).
-* The dashboard auto‑reconnects to MQTT and updates subscriptions on connect.
-* If charts don’t update, verify: WebSocket port (e.g., 8083), broker path (`/mqtt` if used), credentials, and topic names.
+* For demos: keep the simulator enabled.
+* For production: disable the simulator, enable MQTT, and review chart/log limits as needed.
