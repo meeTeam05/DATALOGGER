@@ -6,12 +6,17 @@
     <title>SHT31 Temperature Monitor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌡️ SHT31 Temperature & Humidity Monitor</h1>
+            <h1>🌡️ Temperature & Humidity Monitor</h1>
             <p>Real-time Monitoring Dashboard</p>
             
             <!-- MQTT Connection Status -->
@@ -20,6 +25,10 @@
                     <span class="status-dot" id="statusDot"></span>
                     <span id="statusText">MQTT Disconnected</span>
                 </div>
+                <div class="connection-status" id="firebaseStatus">
+                    <span class="status-dot" id="firebaseDot"></span>
+                    <span id="firebaseText">Firebase Disconnected</span>
+                </div>
                 <button class="settings-btn" id="settingsBtn">⚙️</button>
             </div>
         </div>
@@ -27,7 +36,10 @@
         <!-- MQTT Configuration Modal -->
         <div class="modal" id="mqttModal">
             <div class="modal-content">
-                <h3>MQTT Broker Configuration</h3>
+                <h3>Configuration Settings</h3>
+                
+                <!-- MQTT Settings -->
+                <h4>MQTT Broker Configuration</h4>
                 <div class="config-group">
                     <label for="mqttIp">IP Address:</label>
                     <input type="text" id="mqttIp" value="127.0.0.1" placeholder="192.168.1.100">
@@ -48,6 +60,22 @@
                     <label for="mqttPass">Password (optional):</label>
                     <input type="password" id="mqttPass" placeholder="Leave empty if no password">
                 </div>
+
+                <!-- Firebase Settings -->
+                <h4>Firebase Configuration</h4>
+                <div class="config-group">
+                    <label for="firebaseUrl">Firebase Database URL:</label>
+                    <input type="text" id="firebaseUrl" placeholder="https://your-project.firebaseio.com">
+                </div>
+                <div class="config-group">
+                    <label for="firebaseApiKey">API Key:</label>
+                    <input type="text" id="firebaseApiKey" placeholder="Your Firebase API Key">
+                </div>
+                <div class="config-group">
+                    <label for="firebaseProject">Project ID:</label>
+                    <input type="text" id="firebaseProject" placeholder="your-project-id">
+                </div>
+
                 <div class="modal-buttons">
                     <button class="cancel-btn" id="cancelBtn">Cancel</button>
                     <button class="save-btn" id="saveBtn">Save & Connect</button>
@@ -80,6 +108,14 @@
                 <label>Device Control</label>
                 <button class="device-btn" id="deviceBtn">DEVICE OFF</button>
             </div>
+
+            <div class="control-group">
+                <label>Data Management</label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                    <button class="data-btn" id="loadDataBtn">Load History</button>
+                    <button class="data-btn" id="clearDataBtn">Clear Charts</button>
+                </div>
+            </div>
         </div>
 
         <div class="current-display" id="currentDisplay">
@@ -89,17 +125,23 @@
         <div class="status-display" id="statusDisplay">
             <div class="status-item">[INIT] SHT31 Temperature Monitor Started</div>
             <div class="status-item">[INFO] System ready for data acquisition</div>
-            <div class="status-item status-warning">[WARNING] Turn on device first</div>
+            <div class="status-item status-warning">[WARNING] Configure Firebase for data persistence</div>
         </div>
 
         <div class="charts-container">
             <div class="chart-wrapper">
-                <div class="chart-title">🌡️ Temperature</div>
+                <div class="chart-header">
+                    <div class="chart-title">🌡️ Temperature</div>
+                    <div class="chart-stats" id="tempStats">Min: -- | Max: -- | Avg: --</div>
+                </div>
                 <canvas id="tempChart1" width="400" height="200"></canvas>
             </div>
             
             <div class="chart-wrapper">
-                <div class="chart-title">💧 Humidity</div>
+                <div class="chart-header">
+                    <div class="chart-title">💧 Humidity</div>
+                    <div class="chart-stats" id="humiStats">Min: -- | Max: -- | Avg: --</div>
+                </div>
                 <canvas id="tempChart2" width="400" height="200"></canvas>
             </div>
         </div>

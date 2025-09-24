@@ -2,17 +2,26 @@
 let isPeriodic = false;
 let isDeviceOn = false;
 let isMqttConnected = false;
+let isFirebaseConnected = false;
 let frameRate = 1; // Hz
 let temperatureData = [];
 let humidityData = [];
 let statusQueue = [];
-let maxDataPoints = 15;
+let maxDataPoints = 50; // Increased for better history
 let maxStatusItems = 5;
 let mqttClient = null;
+let firebaseDb = null;
 
 // Current values for display (updated only from MQTT)
 let currentTemp = 0.0;
 let currentHumi = 0.0;
+
+// Firebase Configuration
+let FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAxEhTb1cNHTwmVWh4vbpA5MZSF0Vf0l0U",
+    databaseURL: "https://datalogger-8c5d5-default-rtdb.firebaseio.com/",
+    projectId: "datalogger-8c5d5"
+};
 
 // MQTT Configuration - Set default credentials to match broker
 const MQTT_CONFIG = {
@@ -32,7 +41,7 @@ const MQTT_CONFIG = {
     }
 };
 
-// Chart configurations
+// Enhanced Chart configurations with beautiful styling
 const chartTempConfig = {
     type: 'line',
     data: {
@@ -40,13 +49,19 @@ const chartTempConfig = {
         datasets: [{
             label: 'Temperature (°C)',
             data: [],
-            borderColor: 'rgb(102, 126, 234)',
-            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.1)',
             tension: 0.4,
-            pointRadius: 3,
-            pointHoverRadius: 5,
-            borderWidth: 2,
-            fill: true
+            pointRadius: 4,
+            pointHoverRadius: 8,
+            borderWidth: 3,
+            fill: true,
+            pointBackgroundColor: 'rgba(255, 99, 132, 1)',
+            pointBorderColor: 'white',
+            pointBorderWidth: 2,
+            pointHoverBackgroundColor: 'rgba(255, 99, 132, 1)',
+            pointHoverBorderColor: 'white',
+            pointHoverBorderWidth: 3
         }]
     },
     options: {
@@ -56,40 +71,72 @@ const chartTempConfig = {
             intersect: false,
             mode: 'index'
         },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                    color: '#2c3e50',
+                    font: { size: 12, weight: 'bold' },
+                    usePointStyle: true,
+                    pointStyle: 'circle'
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(255, 99, 132, 0.9)',
+                titleColor: 'white',
+                bodyColor: 'white',
+                cornerRadius: 8,
+                displayColors: false,
+                callbacks: {
+                    label: function(context) {
+                        return `Temperature: ${context.parsed.y.toFixed(1)}°C`;
+                    }
+                }
+            }
+        },
         scales: {
             y: {
                 beginAtZero: false,
-                grid: { 
-                    color: 'rgba(102, 126, 234, 0.1)',
+                grid: {
+                    color: 'rgba(255, 99, 132, 0.1)',
                     drawBorder: false
                 },
-                ticks: { 
+                ticks: {
                     color: '#2c3e50',
-                    font: { size: 10 }
+                    font: { size: 11, weight: 'bold' },
+                    callback: function(value) {
+                        return value.toFixed(1) + '°C';
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Temperature (°C)',
+                    color: '#2c3e50',
+                    font: { size: 12, weight: 'bold' }
                 }
             },
             x: {
-                grid: { 
-                    color: 'rgba(102, 126, 234, 0.1)',
+                grid: {
+                    color: 'rgba(255, 99, 132, 0.1)',
                     drawBorder: false
                 },
-                ticks: { 
+                ticks: {
                     color: '#2c3e50',
                     font: { size: 10 },
                     maxTicksLimit: 8
-                }
-            }
-        },
-        plugins: {
-            legend: { 
-                labels: { 
+                },
+                title: {
+                    display: true,
+                    text: 'Time',
                     color: '#2c3e50',
-                    font: { size: 11 }
+                    font: { size: 12, weight: 'bold' }
                 }
             }
         },
-        animation: { 
-            duration: 200
+        animation: {
+            duration: 750,
+            easing: 'easeInOutQuart'
         }
     }
 };
@@ -101,13 +148,19 @@ const chartHumiConfig = {
         datasets: [{
             label: 'Humidity (%)',
             data: [],
-            borderColor: 'rgba(197, 102, 234, 1)',
-            backgroundColor: 'rgba(197, 102, 234, 0.1)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            backgroundColor: 'rgba(54, 162, 235, 0.1)',
             tension: 0.4,
-            pointRadius: 3,
-            pointHoverRadius: 5,
-            borderWidth: 2,
-            fill: true
+            pointRadius: 4,
+            pointHoverRadius: 8,
+            borderWidth: 3,
+            fill: true,
+            pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+            pointBorderColor: 'white',
+            pointBorderWidth: 2,
+            pointHoverBackgroundColor: 'rgba(54, 162, 235, 1)',
+            pointHoverBorderColor: 'white',
+            pointHoverBorderWidth: 3
         }]
     },
     options: {
@@ -117,46 +170,265 @@ const chartHumiConfig = {
             intersect: false,
             mode: 'index'
         },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                    color: '#2c3e50',
+                    font: { size: 12, weight: 'bold' },
+                    usePointStyle: true,
+                    pointStyle: 'circle'
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(54, 162, 235, 0.9)',
+                titleColor: 'white',
+                bodyColor: 'white',
+                cornerRadius: 8,
+                displayColors: false,
+                callbacks: {
+                    label: function(context) {
+                        return `Humidity: ${context.parsed.y.toFixed(1)}%`;
+                    }
+                }
+            }
+        },
         scales: {
             y: {
                 beginAtZero: false,
-                grid: { 
-                    color: 'rgba(197, 102, 234, 0.1)',
+                grid: {
+                    color: 'rgba(54, 162, 235, 0.1)',
                     drawBorder: false
                 },
-                ticks: { 
+                ticks: {
                     color: '#2c3e50',
-                    font: { size: 10 }
+                    font: { size: 11, weight: 'bold' },
+                    callback: function(value) {
+                        return value.toFixed(1) + '%';
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Humidity (%)',
+                    color: '#2c3e50',
+                    font: { size: 12, weight: 'bold' }
                 }
             },
             x: {
-                grid: { 
-                    color: 'rgba(197, 102, 234, 0.1)',
+                grid: {
+                    color: 'rgba(54, 162, 235, 0.1)',
                     drawBorder: false
                 },
-                ticks: { 
+                ticks: {
                     color: '#2c3e50',
                     font: { size: 10 },
                     maxTicksLimit: 8
-                }
-            }
-        },
-        plugins: {
-            legend: { 
-                labels: { 
+                },
+                title: {
+                    display: true,
+                    text: 'Time',
                     color: '#2c3e50',
-                    font: { size: 11 }
+                    font: { size: 12, weight: 'bold' }
                 }
             }
         },
-        animation: { 
-            duration: 200
+        animation: {
+            duration: 750,
+            easing: 'easeInOutQuart'
         }
     }
 };
 
 // Initialize charts
 let chart1, chart2;
+
+// Firebase Functions
+function initializeFirebase() {
+    if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL || !FIREBASE_CONFIG.projectId) {
+        addStatus('[WARNING] Firebase configuration incomplete', 'WARNING');
+        return false;
+    }
+
+    try {
+        if (firebase.apps.length === 0) {
+            firebase.initializeApp(FIREBASE_CONFIG);
+        }
+        firebaseDb = firebase.database();
+        
+        // Test connection and write permissions
+        firebaseDb.ref('.info/connected').on('value', function(snapshot) {
+            if (snapshot.val() === true) {
+                // Test write permission with a simple test
+                firebaseDb.ref('test/connection').set({
+                    timestamp: Date.now(),
+                    message: 'Connection test'
+                }).then(() => {
+                    updateFirebaseStatus(true);
+                    addStatus('Firebase write permissions verified', 'FIREBASE');
+                    // Clean up test data
+                    firebaseDb.ref('test').remove();
+                }).catch((error) => {
+                    updateFirebaseStatus(false);
+                    addStatus(`Firebase permission error: ${error.code}`, 'ERROR');
+                    addStatus('Please update Firebase database rules', 'WARNING');
+                });
+            } else {
+                updateFirebaseStatus(false);
+            }
+        });
+        
+        return true;
+    } catch (error) {
+        addStatus(`Firebase init error: ${error.message}`, 'ERROR');
+        return false;
+    }
+}
+
+function updateFirebaseStatus(connected) {
+    isFirebaseConnected = connected;
+    const firebaseDot = document.getElementById('firebaseDot');
+    const firebaseText = document.getElementById('firebaseText');
+    
+    if (connected) {
+        firebaseDot.className = 'status-dot connected';
+        firebaseText.textContent = 'Firebase Connected';
+        addStatus('Firebase database connected', 'FIREBASE');
+    } else {
+        firebaseDot.className = 'status-dot disconnected';
+        firebaseText.textContent = 'Firebase Disconnected';
+        addStatus('Firebase database disconnected', 'FIREBASE');
+    }
+}
+
+function saveToFirebase(type, value, timestamp) {
+    if (!isFirebaseConnected || !firebaseDb) return;
+    
+    const data = {
+        value: value,
+        timestamp: timestamp,
+        date: new Date(timestamp).toISOString(),
+        source: isPeriodic ? 'periodic' : 'single'
+    };
+    
+    firebaseDb.ref(`sht31/${type}/${timestamp}`).set(data)
+        .then(() => {
+            console.log(`Saved ${type}: ${value} to Firebase`);
+        })
+        .catch((error) => {
+            addStatus(`Firebase save error: ${error.message}`, 'ERROR');
+        });
+}
+
+function loadHistoricalData() {
+    if (!isFirebaseConnected || !firebaseDb) {
+        addStatus('Firebase not connected', 'ERROR');
+        return;
+    }
+    
+    addStatus('Loading historical data...', 'FIREBASE');
+    
+    // Load last 50 temperature readings
+    firebaseDb.ref('sht31/temperature').limitToLast(maxDataPoints).once('value', (snapshot) => {
+        const tempData = snapshot.val();
+        if (tempData) {
+            const tempArray = Object.values(tempData);
+            tempArray.forEach(item => {
+                const timestamp = new Date(item.timestamp).toLocaleTimeString('en-US', {
+                    hour12: false,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                if (chart1) {
+                    chart1.data.labels.push(timestamp);
+                    chart1.data.datasets[0].data.push(item.value);
+                }
+                temperatureData.push(item.value);
+            });
+            
+            if (chart1) {
+                chart1.update('none');
+                updateTempStats();
+            }
+        }
+    });
+    
+    // Load last 50 humidity readings
+    firebaseDb.ref('sht31/humidity').limitToLast(maxDataPoints).once('value', (snapshot) => {
+        const humiData = snapshot.val();
+        if (humiData) {
+            const humiArray = Object.values(humiData);
+            humiArray.forEach(item => {
+                const timestamp = new Date(item.timestamp).toLocaleTimeString('en-US', {
+                    hour12: false,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                if (chart2) {
+                    chart2.data.labels.push(timestamp);
+                    chart2.data.datasets[0].data.push(item.value);
+                }
+                humidityData.push(item.value);
+            });
+            
+            if (chart2) {
+                chart2.update('none');
+                updateHumiStats();
+            }
+        }
+        addStatus('Historical data loaded successfully', 'FIREBASE');
+    });
+}
+
+function clearChartData() {
+    if (chart1) {
+        chart1.data.labels = [];
+        chart1.data.datasets[0].data = [];
+        chart1.update('none');
+    }
+    
+    if (chart2) {
+        chart2.data.labels = [];
+        chart2.data.datasets[0].data = [];
+        chart2.update('none');
+    }
+    
+    temperatureData = [];
+    humidityData = [];
+    
+    updateTempStats();
+    updateHumiStats();
+    addStatus('Chart data cleared', 'INFO');
+}
+
+// Statistics calculation functions
+function updateTempStats() {
+    const tempStats = document.getElementById('tempStats');
+    if (temperatureData.length > 0) {
+        const min = Math.min(...temperatureData).toFixed(1);
+        const max = Math.max(...temperatureData).toFixed(1);
+        const avg = (temperatureData.reduce((a, b) => a + b, 0) / temperatureData.length).toFixed(1);
+        tempStats.textContent = `Min: ${min}°C | Max: ${max}°C | Avg: ${avg}°C`;
+    } else {
+        tempStats.textContent = 'Min: -- | Max: -- | Avg: --';
+    }
+}
+
+function updateHumiStats() {
+    const humiStats = document.getElementById('humiStats');
+    if (humidityData.length > 0) {
+        const min = Math.min(...humidityData).toFixed(1);
+        const max = Math.max(...humidityData).toFixed(1);
+        const avg = (humidityData.reduce((a, b) => a + b, 0) / humidityData.length).toFixed(1);
+        humiStats.textContent = `Min: ${min}% | Max: ${max}% | Avg: ${avg}%`;
+    } else {
+        humiStats.textContent = 'Min: -- | Max: -- | Avg: --';
+    }
+}
 
 // Device validation function
 function validateDeviceState(operation) {
@@ -185,7 +457,6 @@ function updateConnectionStatus(connected) {
         statusDot.className = 'status-dot disconnected';
         statusText.textContent = 'MQTT Disconnected';
         addStatus('MQTT broker disconnected', 'MQTT');
-        // Stop periodic mode if MQTT disconnected
         if (isPeriodic) {
             stopPeriodicMode();
         }
@@ -227,7 +498,6 @@ function connectMQTT() {
             protocolId: 'MQTT'
         };
         
-        // Always add username if configured (broker seems to require it)
         if (MQTT_CONFIG.username) {
             connectOptions.username = MQTT_CONFIG.username;
             if (MQTT_CONFIG.password) {
@@ -249,7 +519,8 @@ function connectMQTT() {
                 MQTT_CONFIG.topics.periodicTemp,
                 MQTT_CONFIG.topics.periodicHumi,
                 MQTT_CONFIG.topics.singleTemp,
-                MQTT_CONFIG.topics.singleHumi
+                MQTT_CONFIG.topics.singleHumi,
+                MQTT_CONFIG.topics.deviceControl  // Subscribe to relay status updates
             ];
             
             mqttClient.subscribe(topics, { qos: 0 }, (err) => {
@@ -307,9 +578,16 @@ function connectMQTT() {
             console.log('MQTT Message:', topic, payload.toString());
             
             const text = payload.toString();
+            
+            // Handle relay status messages
+            if (topic === MQTT_CONFIG.topics.deviceControl) {
+                handleRelayStatusMessage(text);
+                return;
+            }
+            
+            // Handle sensor data
             let val = parseFloat(text);
             
-            // Support JSON format {"value": 26.4, "unit": "C"}
             if (isNaN(val)) {
                 try {
                     const obj = JSON.parse(text);
@@ -323,22 +601,23 @@ function connectMQTT() {
             }
             
             if (!isNaN(val) && isFinite(val)) {
+                const timestamp = Date.now();
                 switch (topic) {
                     case MQTT_CONFIG.topics.periodicTemp:
                         addStatus(`Periodic temp: ${val}°C`, 'DATA');
-                        pushTemperature(val, true); // true indicates periodic data
+                        pushTemperature(val, true, timestamp);
                         break;
                     case MQTT_CONFIG.topics.periodicHumi:
                         addStatus(`Periodic humi: ${val}%`, 'DATA');
-                        pushHumidity(val, true); // true indicates periodic data
+                        pushHumidity(val, true, timestamp);
                         break;
                     case MQTT_CONFIG.topics.singleTemp:
                         addStatus(`Single temp: ${val}°C`, 'SINGLE');
-                        pushTemperature(val, false); // false indicates single reading
+                        pushTemperature(val, false, timestamp);
                         break;
                     case MQTT_CONFIG.topics.singleHumi:
                         addStatus(`Single humi: ${val}%`, 'SINGLE');
-                        pushHumidity(val, false); // false indicates single reading
+                        pushHumidity(val, false, timestamp);
                         break;
                 }
             } else {
@@ -361,6 +640,9 @@ function openModal() {
     document.getElementById('mqttPath').value = MQTT_CONFIG.path;
     document.getElementById('mqttUser').value = MQTT_CONFIG.username;
     document.getElementById('mqttPass').value = MQTT_CONFIG.password;
+    document.getElementById('firebaseUrl').value = FIREBASE_CONFIG.databaseURL;
+    document.getElementById('firebaseApiKey').value = FIREBASE_CONFIG.apiKey;
+    document.getElementById('firebaseProject').value = FIREBASE_CONFIG.projectId;
 }
 
 function closeModal() {
@@ -374,6 +656,10 @@ function saveAndConnect() {
     const username = document.getElementById('mqttUser').value.trim();
     const password = document.getElementById('mqttPass').value.trim();
     
+    const firebaseUrl = document.getElementById('firebaseUrl').value.trim();
+    const firebaseApiKey = document.getElementById('firebaseApiKey').value.trim();
+    const firebaseProject = document.getElementById('firebaseProject').value.trim();
+    
     if (!ip || !port) {
         addStatus('Please enter valid IP and port', 'ERROR');
         return;
@@ -385,6 +671,10 @@ function saveAndConnect() {
     MQTT_CONFIG.username = username;
     MQTT_CONFIG.password = password;
     
+    FIREBASE_CONFIG.databaseURL = firebaseUrl;
+    FIREBASE_CONFIG.apiKey = firebaseApiKey;
+    FIREBASE_CONFIG.projectId = firebaseProject;
+    
     closeModal();
     addStatus(`Connecting to ${ip}:${port}${MQTT_CONFIG.path}...`, 'MQTT');
     
@@ -393,23 +683,33 @@ function saveAndConnect() {
     }
     
     connectMQTT();
+    
+    if (firebaseUrl && firebaseApiKey && firebaseProject) {
+        addStatus('Initializing Firebase...', 'FIREBASE');
+        initializeFirebase();
+    }
 }
 
-// Helper functions for MQTT data - Fixed to handle periodic vs single data
-function pushTemperature(newTemp, isPeriodic = false) {
+// Enhanced helper functions with Firebase integration
+function pushTemperature(newTemp, isPeriodic = false, timestamp = Date.now()) {
     currentTemp = newTemp;
     updateCurrentDisplay();
     
+    // Save to Firebase if enabled
+    if (isFirebaseConnected && isPeriodic) {
+        saveToFirebase('temperature', newTemp, timestamp);
+    }
+    
     // Only update chart if in periodic mode AND the data is from periodic source
     if (isPeriodic && chart1) {
-        const timestamp = new Date().toLocaleTimeString('en-US', {
+        const timeString = new Date(timestamp).toLocaleTimeString('en-US', {
             hour12: false,
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit'
         });
         
-        chart1.data.labels.push(timestamp);
+        chart1.data.labels.push(timeString);
         chart1.data.datasets[0].data.push(newTemp);
         
         if (chart1.data.labels.length > maxDataPoints) {
@@ -425,23 +725,29 @@ function pushTemperature(newTemp, isPeriodic = false) {
         if (temperatureData.length > maxDataPoints) {
             temperatureData.shift();
         }
+        updateTempStats();
     }
 }
 
-function pushHumidity(newHumi, isPeriodic = false) {
+function pushHumidity(newHumi, isPeriodic = false, timestamp = Date.now()) {
     currentHumi = newHumi;
     updateCurrentDisplay();
     
+    // Save to Firebase if enabled
+    if (isFirebaseConnected && isPeriodic) {
+        saveToFirebase('humidity', newHumi, timestamp);
+    }
+    
     // Only update chart if in periodic mode AND the data is from periodic source
     if (isPeriodic && chart2) {
-        const timestamp = new Date().toLocaleTimeString('en-US', {
+        const timeString = new Date(timestamp).toLocaleTimeString('en-US', {
             hour12: false,
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit'
         });
         
-        chart2.data.labels.push(timestamp);
+        chart2.data.labels.push(timeString);
         chart2.data.datasets[0].data.push(newHumi);
         
         if (chart2.data.labels.length > maxDataPoints) {
@@ -457,6 +763,7 @@ function pushHumidity(newHumi, isPeriodic = false) {
         if (humidityData.length > maxDataPoints) {
             humidityData.shift();
         }
+        updateHumiStats();
     }
 }
 
@@ -464,7 +771,7 @@ function pushHumidity(newHumi, isPeriodic = false) {
 function updateCurrentDisplay() {
     const el = document.getElementById('currentDisplay');
     if (el) {
-        el.textContent = `Current: ${currentTemp}°C & ${currentHumi}% RH`;
+        el.textContent = `Current: ${currentTemp.toFixed(1)}°C & ${currentHumi.toFixed(1)}% RH`;
         el.classList.add('pulse');
         setTimeout(() => el.classList.remove('pulse'), 800);
     }
@@ -488,7 +795,6 @@ function addStatus(message, type = 'INFO') {
         statusQueue.shift();
     }
     
-    // Throttled update for performance
     requestAnimationFrame(updateStatusDisplay);
 }
 
@@ -503,6 +809,10 @@ function updateStatusDisplay() {
                 className += ' status-error';
             } else if (item.type === 'MQTT') {
                 className += ' status-mqtt';
+            } else if (item.type === 'FIREBASE') {
+                className += ' status-firebase';
+            } else if (item.type === 'SYNC') {
+                className += ' status-sync';
             }
             return `<div class="${className}">${item.text}</div>`;
         }).join('');
@@ -510,7 +820,51 @@ function updateStatusDisplay() {
     }
 }
 
-// Control functions (MQTT commands only, no simulation)
+// Handle relay status synchronization from ESP32
+function handleRelayStatusMessage(message) {
+    console.log('Relay status message:', message);
+    
+    let newRelayState = false;
+    
+    // Parse different relay status formats from ESP32
+    if (message.includes('RELAY ON') || message.includes('relay:ON')) {
+        newRelayState = true;
+    } else if (message.includes('RELAY OFF') || message.includes('relay:OFF')) {
+        newRelayState = false;
+    } else {
+        // Try to parse as simple ON/OFF
+        const upperMessage = message.toUpperCase().trim();
+        if (upperMessage === 'ON' || upperMessage === 'RELAY ON') {
+            newRelayState = true;
+        } else if (upperMessage === 'OFF' || upperMessage === 'RELAY OFF') {
+            newRelayState = false;
+        } else {
+            console.log('Unknown relay status format:', message);
+            return;
+        }
+    }
+    
+    // Only update if state actually changed
+    if (newRelayState !== isDeviceOn) {
+        isDeviceOn = newRelayState;
+        const deviceBtn = document.getElementById('deviceBtn');
+        if (deviceBtn) {
+            deviceBtn.textContent = isDeviceOn ? 'DEVICE ON' : 'DEVICE OFF';
+            if (isDeviceOn) {
+                deviceBtn.classList.add('on');
+            } else {
+                deviceBtn.classList.remove('on');
+            }
+        }
+        
+        addStatus(`Device state synced from ESP32: ${isDeviceOn ? 'ON' : 'OFF'}`, 'SYNC');
+        
+        // If relay turned off, stop periodic mode
+        if (!isDeviceOn && isPeriodic) {
+            stopPeriodicMode();
+        }
+    }
+}
 function startPeriodicMode() {
     if (!validateDeviceState('periodic mode')) return;
     
@@ -546,19 +900,16 @@ function singleRead() {
     addStatus('Single read command sent', 'SINGLE');
 }
 
-// Fixed device control function
 function toggleDevice() {
     if (!isMqttConnected) {
         addStatus('MQTT not connected', 'ERROR');
         return;
     }
     
-    // Send the appropriate command based on current state
     const command = isDeviceOn ? 'RELAY OFF' : 'RELAY ON';
     publishMQTT(MQTT_CONFIG.topics.deviceControl, command);
     addStatus(`Device command sent: ${command}`, 'POWER');
     
-    // Toggle the state
     isDeviceOn = !isDeviceOn;
     const deviceBtn = document.getElementById('deviceBtn');
     if (deviceBtn) {
@@ -621,11 +972,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const stopBtn = document.getElementById('stopBtn');
     const singleBtn = document.getElementById('singleBtn');
     const deviceBtn = document.getElementById('deviceBtn');
+    const loadDataBtn = document.getElementById('loadDataBtn');
+    const clearDataBtn = document.getElementById('clearDataBtn');
     
     if (periodicBtn) periodicBtn.addEventListener('click', startPeriodicMode);
     if (stopBtn) stopBtn.addEventListener('click', stopPeriodicMode);
     if (singleBtn) singleBtn.addEventListener('click', singleRead);
     if (deviceBtn) deviceBtn.addEventListener('click', toggleDevice);
+    if (loadDataBtn) loadDataBtn.addEventListener('click', loadHistoricalData);
+    if (clearDataBtn) clearDataBtn.addEventListener('click', clearChartData);
     
     // Window resize handler
     window.addEventListener('resize', handleResize);
@@ -634,8 +989,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         addStatus('SHT31 initialized');
         addStatus('System ready');
-        addStatus('[WARNING] Turn on device first', 'WARNING');
+        addStatus('[WARNING] Configure Firebase for data persistence', 'WARNING');
         updateConnectionStatus(false);
+        updateFirebaseStatus(false);
     }, 500);
     
     // Try to connect MQTT on load
