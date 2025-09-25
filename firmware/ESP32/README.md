@@ -17,16 +17,17 @@ MQTT Broker ←→ ESP32 MQTT Handler ←→ STM32 UART Interface ←→ STM32
 ```
 esp32_mqtt_bridge/
 ├── main/
-│   ├── app_main.c                 # Main application logic
-│   ├── CMakeLists.txt            # Main component build
-│   └── Kconfig.projbuild         # Configuration options
+│   ├── app_main.c                        # Main application logic
+│   ├── CMakeLists.txt                    # Main component build
+│   └── Kconfig.projbuild                 # Configuration options
 ├── components/
-│   ├── ring_buffer/              # Circular buffer for UART
-│   ├── stm32_uart/              # STM32 communication layer  
-│   ├── mqtt_handler/            # MQTT5 client wrapper
-│   ├── relay_control/           # GPIO relay management
-│   └── sensor_parser/           # SHT3X data parsing
-├── CMakeLists.txt               # Root build configuration
+│   ├── ring_buffer/                      # Circular buffer for UART
+│   ├── stm32_uart/                       # STM32 communication layer  
+│   ├── mqtt_handler/                     # MQTT5 client wrapper
+│   ├── relay_control/                    # GPIO relay management
+│   ├── sensor_parser/                    # SHT3X data parsing
+│   └── protocol_examples_common/         # Protocol Common
+├── CMakeLists.txt                        # Root build configuration
 └── README.md
 ```
 
