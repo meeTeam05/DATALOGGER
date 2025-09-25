@@ -8,11 +8,15 @@ A minimal, copy‑friendly guide to run the broker for your datalogger.
 
 ```
 broker/
-├─ mosquitto.conf            # broker configuration
-├─ auth/
-│  └─ passwd.txt             # username/password file (bcrypt)
-├─ data/                     # persistence (mosquitto.db)
-└─ log/                      # logs (mosquitto.log)
+├─ mosquitto.conf             # broker configuration
+├─ config/
+│   ├── mosquitto.conf  
+│   ├── auth/
+│   └── └── passwd.txt        # username/password file (bcrypt)       
+├─ data/
+│   └── mosquitto.db          # persistence (mosquitto.db)
+├─ log/                       # logs (mosquitto.log)
+└── └── mosquitto.db          # persistence (mosquitto.db)
 ```
 
 > Tip: keep `data/` and `log/` out of git.
