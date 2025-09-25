@@ -1,3 +1,7 @@
+/**
+ * @file app_main.c
+ */
+/* INCLUDES ------------------------------------------------------------------*/
 #include <stdio.h>
 #include <string.h>
 #include "esp_system.h"
@@ -6,6 +10,7 @@
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 // Include custom libraries
 #include "stm32_uart.h"
@@ -13,6 +18,7 @@
 #include "relay_control.h"
 #include "sensor_parser.h"
 
+/* STATIC VARIABLES ----------------------------------------------------------*/
 static const char *TAG = "MQTT_BRIDGE_APP";
 
 // MQTT Topics
@@ -22,13 +28,85 @@ static const char *TAG = "MQTT_BRIDGE_APP";
 #define TOPIC_SHT3X_PERIODIC_TEMPERATURE        "esp32/sensor/sht3x/periodic/temperature"
 #define TOPIC_SHT3X_PERIODIC_HUMIDITY           "esp32/sensor/sht3x/periodic/humidity"
 #define TOPIC_CONTROL_RELAY                     "esp32/control/relay"
-#define TOPIC_STATUS                            "esp32/status"
+#define TOPIC_STATE_SYNC                        "esp32/state"
 
 // Global components
 static stm32_uart_t stm32_uart;
 static mqtt_handler_t mqtt_handler;
 static relay_control_t relay_control;
 static sensor_parser_t sensor_parser;
+
+// FIXED: Global state tracking
+static bool g_periodic_active = false;
+static bool g_device_on = false;
+static int g_periodic_rate = 1;  // Default 1 Hz
+
+/* STATE SYNCHRONIZATION FUNCTIONS -------------------------------------------*/
+
+/**
+ * @brief Create state JSON string without using cJSON
+ */
+static void create_state_message(char* buffer, size_t buffer_size)
+{
+    snprintf(buffer, buffer_size, 
+             "{\"device\":\"%s\",\"periodic\":\"%s\",\"rate\":%d,\"timestamp\":%lld}",
+             g_device_on ? "ON" : "OFF",
+             g_periodic_active ? "ON" : "OFF", 
+             g_periodic_rate,
+             (long long)(esp_timer_get_time() / 1000));  // milliseconds
+}
+
+/**
+ * @brief Publish current state with retain flag
+ */
+static void publish_current_state(void)
+{
+    if (!MQTT_Handler_IsConnected(&mqtt_handler))
+    {
+        return;
+    }
+    
+    char state_msg[256];
+    create_state_message(state_msg, sizeof(state_msg));
+    
+    // Publish with retain flag so new clients get latest state
+    MQTT_Handler_Publish(&mqtt_handler, TOPIC_STATE_SYNC, state_msg, 0, 1, 1);
+    ESP_LOGI(TAG, "State published: %s", state_msg);
+}
+
+/**
+ * @brief Update internal state and publish
+ */
+static void update_and_publish_state(bool device_on, bool periodic_active, int rate)
+{
+    bool state_changed = false;
+    
+    if (g_device_on != device_on)
+    {
+        g_device_on = device_on;
+        state_changed = true;
+        ESP_LOGI(TAG, "Device state changed: %s", device_on ? "ON" : "OFF");
+    }
+    
+    if (g_periodic_active != periodic_active)
+    {
+        g_periodic_active = periodic_active;
+        state_changed = true;
+        ESP_LOGI(TAG, "Periodic state changed: %s", periodic_active ? "ON" : "OFF");
+    }
+    
+    if (g_periodic_rate != rate)
+    {
+        g_periodic_rate = rate;
+        state_changed = true;
+        ESP_LOGI(TAG, "Periodic rate changed: %d Hz", rate);
+    }
+    
+    if (state_changed)
+    {
+        publish_current_state();
+    }
+}
 
 /* CALLBACK FUNCTIONS --------------------------------------------------------*/
 
@@ -90,17 +168,31 @@ static void on_stm32_data_received(const char* line)
  */
 static void on_relay_state_changed(bool state)
 {
-    if (!MQTT_Handler_IsConnected(&mqtt_handler))
-    {
-        return;
-    }
-    
-    // Publish relay status
-    char status[64];
-    snprintf(status, sizeof(status), "relay:%s", state ? "ON" : "OFF");
-    MQTT_Handler_Publish(&mqtt_handler, TOPIC_STATUS, status, 0, 1, 0);
+    // Update global state
+    update_and_publish_state(state, g_periodic_active, g_periodic_rate);
     
     ESP_LOGI(TAG, "Relay state changed: %s", state ? "ON" : "OFF");
+}
+
+/**
+ * @brief FIXED: Parse command and extract rate
+ */
+static int extract_periodic_rate(const char* command)
+{
+    // Look for rate in command like "SHT3X PERIODIC 2 HIGH"
+    char* rate_str = strstr(command, "PERIODIC");
+    if (rate_str)
+    {
+        rate_str += 8; // Skip "PERIODIC"
+        while (*rate_str == ' ') rate_str++; // Skip spaces
+        
+        int rate = atoi(rate_str);
+        if (rate > 0 && rate <= 10)
+        {
+            return rate;
+        }
+    }
+    return g_periodic_rate; // Return current rate if not found
 }
 
 /**
@@ -113,10 +205,22 @@ static void on_mqtt_data_received(const char* topic, const char* data, int data_
     // Handle SHT3X commands
     if (strcmp(topic, TOPIC_SHT3X_COMMAND) == 0)
     {
+        // FIXED: Track periodic state based on commands
+        if (strstr(data, "PERIODIC") && !strstr(data, "STOP"))
+        {
+            int new_rate = extract_periodic_rate(data);
+            update_and_publish_state(g_device_on, true, new_rate);
+        }
+        else if (strstr(data, "PERIODIC STOP"))
+        {
+            update_and_publish_state(g_device_on, false, g_periodic_rate);
+        }
+        
         if (STM32_UART_SendCommand(&stm32_uart, data))
         {
             ESP_LOGI(TAG, "Command forwarded to STM32: %s", data);
-        } else
+        } 
+        else
         {
             ESP_LOGE(TAG, "Failed to send command to STM32: %s", data);
         }
@@ -127,9 +231,18 @@ static void on_mqtt_data_received(const char* topic, const char* data, int data_
         if (Relay_ProcessCommand(&relay_control, data))
         {
             ESP_LOGI(TAG, "Relay command processed: %s", data);
-        } else {
+        } 
+        else 
+        {
             ESP_LOGW(TAG, "Unknown relay command: %s", data);
         }
+    }
+    // FIXED: Handle state sync requests
+    else if (strcmp(topic, TOPIC_STATE_SYNC) == 0 && 
+             strstr(data, "REQUEST"))
+    {
+        ESP_LOGI(TAG, "State sync requested by client");
+        publish_current_state();
     }
 }
 
@@ -148,7 +261,8 @@ static bool initialize_components(void)
                          CONFIG_MQTT_UART_BAUD_RATE,
                          CONFIG_MQTT_UART_TXD,
                          CONFIG_MQTT_UART_RXD,
-                         on_stm32_data_received)) {
+                         on_stm32_data_received))
+                         {
         ESP_LOGE(TAG, "Failed to initialize STM32 UART");
         success = false;
     }
@@ -158,13 +272,15 @@ static bool initialize_components(void)
                            CONFIG_BROKER_URL,
                            CONFIG_MQTT_USERNAME,
                            CONFIG_MQTT_PASSWORD,
-                           on_mqtt_data_received)) {
+                           on_mqtt_data_received))
+                           {
         ESP_LOGE(TAG, "Failed to initialize MQTT Handler");
         success = false;
     }
     
     // Initialize Relay Control
-    if (!Relay_Init(&relay_control, CONFIG_RELAY_GPIO_NUM, on_relay_state_changed)) {
+    if (!Relay_Init(&relay_control, CONFIG_RELAY_GPIO_NUM, on_relay_state_changed))
+    {
         ESP_LOGE(TAG, "Failed to initialize Relay Control");
         success = false;
     }
@@ -175,6 +291,11 @@ static bool initialize_components(void)
         ESP_LOGE(TAG, "Failed to initialize Sensor Parser");
         success = false;
     }
+    
+    // FIXED: Initialize global state with actual hardware state
+    g_device_on = Relay_GetState(&relay_control);
+    g_periodic_active = false;
+    g_periodic_rate = 1;
     
     return success;
 }
@@ -225,15 +346,16 @@ static void subscribe_mqtt_topics(void)
     // Subscribe to command topics
     MQTT_Handler_Subscribe(&mqtt_handler, TOPIC_SHT3X_COMMAND, 1);
     MQTT_Handler_Subscribe(&mqtt_handler, TOPIC_CONTROL_RELAY, 1);
+    MQTT_Handler_Subscribe(&mqtt_handler, TOPIC_STATE_SYNC, 1);  // NEW: Subscribe to state sync
     
-    // Publish initial status
-    MQTT_Handler_Publish(&mqtt_handler, TOPIC_STATUS, "status:connected,bridge:ready", 0, 1, 0);
+    // FIXED: Publish initial state with retain flag
+    publish_current_state();
     
-    ESP_LOGI(TAG, "MQTT topics subscribed and initial status published");
+    ESP_LOGI(TAG, "MQTT topics subscribed and initial state published");
 }
 
 /**
- * @brief MQTT subscribe task - FIXED VERSION
+ * @brief MQTT subscribe task
  */
 static void mqtt_subscribe_task(void* param)
 {
@@ -269,21 +391,23 @@ void app_main(void)
     ESP_LOGI(TAG, "WiFi connected successfully");
     
     // Initialize all components
-    if (!initialize_components()) {
+    if (!initialize_components())
+    {
         ESP_LOGE(TAG, "Failed to initialize components, restarting...");
         esp_restart();
     }
     ESP_LOGI(TAG, "All components initialized successfully");
     
     // Start all services
-    if (!start_services()) {
+    if (!start_services())
+    {
         ESP_LOGE(TAG, "Failed to start services, restarting...");
         esp_restart();
     }
     ESP_LOGI(TAG, "All services started successfully");
     
-    // Subscribe to MQTT topics (runs in background) - FIXED
-    xTaskCreate(mqtt_subscribe_task, "mqtt_subscribe", 2048, NULL, 3, NULL);
+    // Subscribe to MQTT topics (runs in background)
+    xTaskCreate(mqtt_subscribe_task, "mqtt_subscribe", 10240, NULL, 3, NULL);
     
     // Main loop - monitor system status
     ESP_LOGI(TAG, "=== System Ready ===");
@@ -296,37 +420,41 @@ void app_main(void)
     ESP_LOGI(TAG, "Topics:");
     ESP_LOGI(TAG, "  Commands: %s", TOPIC_SHT3X_COMMAND);
     ESP_LOGI(TAG, "  Relay: %s", TOPIC_CONTROL_RELAY);
-    ESP_LOGI(TAG, "  Status: %s", TOPIC_STATUS);
+    ESP_LOGI(TAG, "  State: %s", TOPIC_STATE_SYNC);
     ESP_LOGI(TAG, "  Single T: %s", TOPIC_SHT3X_SINGLE_TEMPERATURE);
     ESP_LOGI(TAG, "  Single H: %s", TOPIC_SHT3X_SINGLE_HUMIDITY);
     ESP_LOGI(TAG, "  Periodic T: %s", TOPIC_SHT3X_PERIODIC_TEMPERATURE);
     ESP_LOGI(TAG, "  Periodic H: %s", TOPIC_SHT3X_PERIODIC_HUMIDITY);
     
-    // First Status
-    bool last_relay = Relay_GetState(&relay_control);
-    bool last_mqtt  = MQTT_Handler_IsConnected(&mqtt_handler);
+    // Status tracking
+    bool last_relay = g_device_on;
+    bool last_periodic = g_periodic_active;
+    bool last_mqtt = MQTT_Handler_IsConnected(&mqtt_handler);
 
-    ESP_LOGI(TAG, "MQTT=%s, Relay=%s",
+    ESP_LOGI(TAG, "Initial State: MQTT=%s, Device=%s, Periodic=%s",
              last_mqtt ? "Connected" : "Disconnected",
-             last_relay ? "ON" : "OFF");
+             last_relay ? "ON" : "OFF",
+             last_periodic ? "ON" : "OFF");
 
     // Main monitoring loop
     while (1)
     {
+        bool relay_now = g_device_on;
+        bool periodic_now = g_periodic_active;
+        bool mqtt_now = MQTT_Handler_IsConnected(&mqtt_handler);
 
-        bool relay_now = Relay_GetState(&relay_control);
-        bool mqtt_now  = MQTT_Handler_IsConnected(&mqtt_handler);
-
-        if (relay_now != last_relay || mqtt_now != last_mqtt)
+        if (relay_now != last_relay || periodic_now != last_periodic || mqtt_now != last_mqtt)
         {
-            ESP_LOGI(TAG, "System Status: MQTT=%s, Relay=%s, Free Heap=%lu", 
-                     MQTT_Handler_IsConnected(&mqtt_handler) ? "Connected" : "Disconnected",
-                     Relay_GetState(&relay_control) ? "ON" : "OFF",
+            ESP_LOGI(TAG, "System Status: MQTT=%s, Device=%s, Periodic=%s, Free Heap=%lu", 
+                     mqtt_now ? "Connected" : "Disconnected",
+                     relay_now ? "ON" : "OFF",
+                     periodic_now ? "ON" : "OFF",
                      esp_get_free_heap_size());
         }
 
         last_relay = relay_now;
-        last_mqtt  = mqtt_now;
+        last_periodic = periodic_now;
+        last_mqtt = mqtt_now;
         
         vTaskDelay(pdMS_TO_TICKS(200));
     }
