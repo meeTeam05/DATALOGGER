@@ -557,33 +557,7 @@ body {
     animation: pulse 1s ease;
 }
 
-/* Loading state - Enhanced */
-.chart-wrapper::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 24px;
-    height: 24px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #667eea;
-    border-radius: 50%;
-    animation: spin 1.2s linear infinite;
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.chart-wrapper.loading::before {
-    opacity: 1;
-}
-
-@keyframes spin {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-/* Enhanced Responsive Design */
+/* Responsive Design */
 @media (max-width: 768px) {
     .charts-container {
         grid-template-columns: 1fr;
@@ -730,35 +704,5 @@ body {
     .chart-stats {
         font-size: 0.6rem;
         padding: 2px 4px;
-    }
-}
-
-/* Print styles */
-@media print {
-    body {
-        background: white;
-    }
-    
-    .container {
-        box-shadow: none;
-        background: white;
-    }
-    
-    .controls, .status-display, .mqtt-status {
-        display: none;
-    }
-    
-    .charts-container {
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-    }
-    
-    .modal {
-        display: none !important;
-    }
-    
-    .chart-wrapper {
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        break-inside: avoid;
     }
 }
