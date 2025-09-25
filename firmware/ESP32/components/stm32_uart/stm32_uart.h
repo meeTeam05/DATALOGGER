@@ -5,8 +5,10 @@
 #ifndef STM32_UART_H
 #define STM32_UART_H
 
+/* INCLUDES ------------------------------------------------------------------*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "ring_buffer.h"
 
 /* DEFINES -------------------------------------------------------------------*/
@@ -36,6 +38,7 @@ typedef struct {
  * @param tx_pin TX GPIO pin
  * @param rx_pin RX GPIO pin
  * @param callback Data received callback function
+ * 
  * @return true if successful
  */
 bool STM32_UART_Init(stm32_uart_t *uart, int uart_num, int baud_rate, 
@@ -46,6 +49,7 @@ bool STM32_UART_Init(stm32_uart_t *uart, int uart_num, int baud_rate,
  * 
  * @param uart STM32 UART structure
  * @param command Command string to send
+ * 
  * @return true if successful
  */
 bool STM32_UART_SendCommand(stm32_uart_t *uart, const char* command);
@@ -61,6 +65,7 @@ void STM32_UART_ProcessData(stm32_uart_t *uart);
  * @brief Start STM32 UART processing task
  * 
  * @param uart STM32 UART structure
+ * 
  * @return true if successful
  */
 bool STM32_UART_StartTask(stm32_uart_t *uart);
