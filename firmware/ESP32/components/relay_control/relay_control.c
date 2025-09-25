@@ -1,17 +1,20 @@
 /**
  * @file relay_control.c
  */
+/* INCLUDES ------------------------------------------------------------------*/
 #include "relay_control.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include <string.h>
 
+/* STATIC VARIABLES ----------------------------------------------------------*/
 static const char *TAG = "RELAY_CONTROL";
 
 /* GLOBAL FUNCTIONS ----------------------------------------------------------*/
 bool Relay_Init(relay_control_t *relay, int gpio_num, relay_state_callback_t callback)
 {
-    if (!relay || gpio_num < 0) {
+    if (!relay || gpio_num < 0)
+    {
         return false;
     }
     
@@ -31,7 +34,8 @@ bool Relay_Init(relay_control_t *relay, int gpio_num, relay_state_callback_t cal
     };
     
     esp_err_t ret = gpio_config(&io_conf);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(TAG, "Failed to configure GPIO%d: %s", gpio_num, esp_err_to_name(ret));
         return false;
     }
@@ -46,7 +50,8 @@ bool Relay_Init(relay_control_t *relay, int gpio_num, relay_state_callback_t cal
 
 bool Relay_SetState(relay_control_t *relay, bool state)
 {
-    if (!relay || !relay->initialized) {
+    if (!relay || !relay->initialized)
+    {
         return false;
     }
     
@@ -56,7 +61,8 @@ bool Relay_SetState(relay_control_t *relay, bool state)
     ESP_LOGI(TAG, "Relay %s (GPIO%d)", state ? "ON" : "OFF", relay->gpio_num);
     
     // Call callback if available
-    if (relay->state_callback) {
+    if (relay->state_callback)
+    {
         relay->state_callback(state);
     }
     
@@ -65,7 +71,8 @@ bool Relay_SetState(relay_control_t *relay, bool state)
 
 bool Relay_GetState(relay_control_t *relay)
 {
-    if (!relay || !relay->initialized) {
+    if (!relay || !relay->initialized)
+    {
         return false;
     }
     
@@ -74,7 +81,8 @@ bool Relay_GetState(relay_control_t *relay)
 
 bool Relay_Toggle(relay_control_t *relay)
 {
-    if (!relay || !relay->initialized) {
+    if (!relay || !relay->initialized)
+    {
         return false;
     }
     
@@ -85,20 +93,24 @@ bool Relay_Toggle(relay_control_t *relay)
 
 bool Relay_ProcessCommand(relay_control_t *relay, const char* command)
 {
-    if (!relay || !relay->initialized || !command) {
+    if (!relay || !relay->initialized || !command)
+    {
         return false;
     }
     
     // Convert to uppercase for comparison
     if (strstr(command, "ON") || strstr(command, "on") ||
-        strstr(command, "1") || strstr(command, "true") || strstr(command, "TRUE")) {
+        strstr(command, "1") || strstr(command, "true") || strstr(command, "TRUE"))
+        {
         return Relay_SetState(relay, true);
     } 
     else if (strstr(command, "OFF") || strstr(command, "off") ||
-             strstr(command, "0") || strstr(command, "false") || strstr(command, "FALSE")) {
+            strstr(command, "0") || strstr(command, "false") || strstr(command, "FALSE"))
+            {
         return Relay_SetState(relay, false);
     }
-    else if (strstr(command, "TOGGLE") || strstr(command, "toggle")) {
+    else if (strstr(command, "TOGGLE") || strstr(command, "toggle"))
+    {
         Relay_Toggle(relay);
         return true;
     }
@@ -109,11 +121,13 @@ bool Relay_ProcessCommand(relay_control_t *relay, const char* command)
 
 void Relay_Deinit(relay_control_t *relay)
 {
-    if (!relay) {
+    if (!relay)
+    {
         return;
     }
     
-    if (relay->initialized) {
+    if (relay->initialized)
+    {
         // Turn off relay before deinit
         gpio_set_level(relay->gpio_num, 0);
         relay->initialized = false;

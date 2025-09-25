@@ -5,6 +5,7 @@
 #ifndef RELAY_CONTROL_H
 #define RELAY_CONTROL_H
 
+/* INCLUDES ------------------------------------------------------------------*/
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -26,6 +27,7 @@ typedef struct {
  * @param relay Relay control structure
  * @param gpio_num GPIO pin number for relay control
  * @param callback State change callback function (optional)
+ * 
  * @return true if successful
  */
 bool Relay_Init(relay_control_t *relay, int gpio_num, relay_state_callback_t callback);
@@ -35,6 +37,7 @@ bool Relay_Init(relay_control_t *relay, int gpio_num, relay_state_callback_t cal
  * 
  * @param relay Relay control structure
  * @param state true for ON, false for OFF
+ * 
  * @return true if successful
  */
 bool Relay_SetState(relay_control_t *relay, bool state);
@@ -43,6 +46,7 @@ bool Relay_SetState(relay_control_t *relay, bool state);
  * @brief Get relay state
  * 
  * @param relay Relay control structure
+ * 
  * @return Current relay state
  */
 bool Relay_GetState(relay_control_t *relay);
@@ -51,6 +55,7 @@ bool Relay_GetState(relay_control_t *relay);
  * @brief Toggle relay state
  * 
  * @param relay Relay control structure
+ * 
  * @return New relay state
  */
 bool Relay_Toggle(relay_control_t *relay);
@@ -60,6 +65,7 @@ bool Relay_Toggle(relay_control_t *relay);
  * 
  * @param relay Relay control structure
  * @param command Command string ("ON", "OFF", "1", "0", etc.)
+ * 
  * @return true if command was processed
  */
 bool Relay_ProcessCommand(relay_control_t *relay, const char* command);
