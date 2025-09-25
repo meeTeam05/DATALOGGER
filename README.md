@@ -24,21 +24,21 @@ DATALOGGER/
 ├── .vscode						# Fix for include lib ESP32
 ├── broker/						# Mosquitto config, auth/, data/, log/
 ├── fireware/
-│   ├── ESP32						# ESP-IDF project (MQTT bridge + relay)
+│   ├── ESP32/				# ESP-IDF project (MQTT bridge + relay)
 │   │   ├── main/
 │   │   ├── components/
 │   │   │   └── ring_buffer/
 │   │   │   └── stm32_uart/
 │   │   │   └── mqtt_handler/
 │   │   │   └── relay_control/
-│   │   │   └── sensor_parser/
-│   ├── STM32
+│   │   └── └── sensor_parser/
+│   ├── STM32/
 │   │   ├── Core/
 │   │   ├── Datalogger_Lib/
 │   │   │   └── inc/				# uart.h, ring_buffer.h, print_cli.h, cmd_*.h, sht3x.h
-│   │   │   └── src/				# uart.c, ring_buffer.c, print_cli.c, cmd_*.c, sht3x.c
+│   └── └── └── src/				# uart.c, ring_buffer.c, print_cli.c, cmd_*.c, sht3x.c
 ├── web/
-├── README.md/		# Project documentation              
+└── README.md		      # Project documentation              
 ```
 
 ---
