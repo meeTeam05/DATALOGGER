@@ -2,7 +2,7 @@
 
 A command-line interface for controlling SHT3X temperature and humidity sensors over I2C on STM32F1 microcontrollers.
 
-## Architecture
+## Architecture Overview
 
 ```
 UART RX → Ring Buffer → Line Assembly → Command Parser → Command Table
@@ -13,7 +13,7 @@ UART RX → Ring Buffer → Line Assembly → Command Parser → Command Table
                                               ↓
                                        UART TX (Status/Data)
 
-Main Loop Timer → SHT3X_FetchData() → I2C → Sensor → UART TX (Periodic Data)
+Main Loop Timer → SHT3X_FetchData() → I2C → Sensor → UART TX (Periodic/Single Data)
 ```
 
 ## Project Structure
