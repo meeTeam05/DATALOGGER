@@ -48,6 +48,15 @@ uint16_t RingBuffer_Available(ring_buffer_t *rb)
     }
 }
 
+void RingBuffer_Clear(ring_buffer_t *rb)
+{
+    if (rb)
+    {
+        rb->head = 0;
+        rb->tail = 0;
+    }
+}
+
 uint16_t RingBuffer_Free(ring_buffer_t *rb)
 {
 	return RING_BUFFER_SIZE - RingBuffer_Available(rb) - 1;

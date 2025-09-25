@@ -58,6 +58,13 @@ bool RingBuffer_Get(ring_buffer_t *rb, uint8_t *data);
  */
 uint16_t RingBuffer_Available(ring_buffer_t *rb);
 
+/**
+ * @brief Clear all data in ring buffer
+ * 
+ * @param rb Pointer to ring buffer structure
+ */
+void RingBuffer_Clear(ring_buffer_t *rb);
+
 /*
  * @brief Get number of free bytes in ring buffer
  *
