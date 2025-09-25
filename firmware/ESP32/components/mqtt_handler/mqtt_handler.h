@@ -5,6 +5,7 @@
 #ifndef MQTT_HANDLER_H
 #define MQTT_HANDLER_H
 
+/* INCLUDES ------------------------------------------------------------------*/
 #include <stdint.h>
 #include <stdbool.h>
 #include "mqtt_client.h"
@@ -33,6 +34,7 @@ typedef struct {
  * @param username Username (can be NULL)
  * @param password Password (can be NULL)
  * @param callback Data received callback function
+ * 
  * @return true if successful
  */
 bool MQTT_Handler_Init(mqtt_handler_t *mqtt, const char* broker_url, 
@@ -43,6 +45,7 @@ bool MQTT_Handler_Init(mqtt_handler_t *mqtt, const char* broker_url,
  * @brief Start MQTT client
  * 
  * @param mqtt MQTT handler structure
+ * 
  * @return true if successful
  */
 bool MQTT_Handler_Start(mqtt_handler_t *mqtt);
@@ -53,6 +56,7 @@ bool MQTT_Handler_Start(mqtt_handler_t *mqtt);
  * @param mqtt MQTT handler structure
  * @param topic Topic to subscribe
  * @param qos QoS level (0-2)
+ * 
  * @return Message ID if successful, -1 if failed
  */
 int MQTT_Handler_Subscribe(mqtt_handler_t *mqtt, const char* topic, int qos);
@@ -66,6 +70,7 @@ int MQTT_Handler_Subscribe(mqtt_handler_t *mqtt, const char* topic, int qos);
  * @param data_len Data length (0 for null-terminated string)
  * @param qos QoS level (0-2)
  * @param retain Retain flag
+ * 
  * @return Message ID if successful, -1 if failed
  */
 int MQTT_Handler_Publish(mqtt_handler_t *mqtt, const char* topic, 
@@ -75,6 +80,7 @@ int MQTT_Handler_Publish(mqtt_handler_t *mqtt, const char* topic,
  * @brief Check if MQTT is connected
  * 
  * @param mqtt MQTT handler structure
+ * 
  * @return true if connected
  */
 bool MQTT_Handler_IsConnected(mqtt_handler_t *mqtt);

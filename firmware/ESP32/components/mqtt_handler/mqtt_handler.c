@@ -1,12 +1,14 @@
 /**
  * @file mqtt_handler.c
  */
+/* INCLUDES ------------------------------------------------------------------*/
 #include "mqtt_handler.h"
 #include "mqtt5_client.h"
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include <string.h>
 
+/* STATIC VARIABLES ----------------------------------------------------------*/
 static const char *TAG = "MQTT_HANDLER";
 
 /* PRIVATE FUNCTIONS ---------------------------------------------------------*/
@@ -16,7 +18,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
     mqtt_handler_t *mqtt = (mqtt_handler_t*)handler_args;
     esp_mqtt_event_handle_t event = event_data;
     
-    switch (event_id) {
+    switch (event_id)
+    {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT Connected");
         mqtt->connected = true;
@@ -45,13 +48,15 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                  event->data_len, event->data);
         
         // Call callback if available
-        if (mqtt->data_callback) {
+        if (mqtt->data_callback)
+        {
             // Create null-terminated strings
             char topic[MQTT_MAX_TOPIC_LEN];
             char data[MQTT_MAX_DATA_LEN];
             
             int topic_len = (event->topic_len < sizeof(topic)-1) ? 
                            event->topic_len : sizeof(topic)-1;
+
             int data_len = (event->data_len < sizeof(data)-1) ? 
                           event->data_len : sizeof(data)-1;
             
@@ -81,7 +86,8 @@ bool MQTT_Handler_Init(mqtt_handler_t *mqtt, const char* broker_url,
                        const char* username, const char* password,
                        mqtt_data_callback_t callback)
 {
-    if (!mqtt || !broker_url) {
+    if (!mqtt || !broker_url)
+    {
         return false;
     }
     
@@ -108,16 +114,20 @@ bool MQTT_Handler_Init(mqtt_handler_t *mqtt, const char* broker_url,
     };
     
     // Set credentials if provided
-    if (username) {
+    if (username)
+    {
         mqtt_cfg.credentials.username = username;
     }
-    if (password) {
+
+    if (password)
+    {
         mqtt_cfg.credentials.authentication.password = password;
     }
     
     // Initialize MQTT client
     mqtt->client = esp_mqtt_client_init(&mqtt_cfg);
-    if (mqtt->client == NULL) {
+    if (mqtt->client == NULL)
+    {
         ESP_LOGE(TAG, "Failed to initialize MQTT client");
         return false;
     }
@@ -125,7 +135,8 @@ bool MQTT_Handler_Init(mqtt_handler_t *mqtt, const char* broker_url,
     // Register event handler
     esp_err_t ret = esp_mqtt_client_register_event(mqtt->client, ESP_EVENT_ANY_ID, 
                                                    mqtt_event_handler, mqtt);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(TAG, "Failed to register MQTT event handler: %s", esp_err_to_name(ret));
         esp_mqtt_client_destroy(mqtt->client);
         mqtt->client = NULL;
@@ -138,12 +149,14 @@ bool MQTT_Handler_Init(mqtt_handler_t *mqtt, const char* broker_url,
 
 bool MQTT_Handler_Start(mqtt_handler_t *mqtt)
 {
-    if (!mqtt || !mqtt->client) {
+    if (!mqtt || !mqtt->client)
+    {
         return false;
     }
     
     esp_err_t ret = esp_mqtt_client_start(mqtt->client);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(TAG, "Failed to start MQTT client: %s", esp_err_to_name(ret));
         return false;
     }
@@ -154,14 +167,18 @@ bool MQTT_Handler_Start(mqtt_handler_t *mqtt)
 
 int MQTT_Handler_Subscribe(mqtt_handler_t *mqtt, const char* topic, int qos)
 {
-    if (!mqtt || !mqtt->client || !topic) {
+    if (!mqtt || !mqtt->client || !topic)
+    {
         return -1;
     }
     
     int msg_id = esp_mqtt_client_subscribe(mqtt->client, topic, qos);
-    if (msg_id >= 0) {
+    if (msg_id >= 0)
+    {
         ESP_LOGI(TAG, "Subscribed to %s, msg_id=%d", topic, msg_id);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Failed to subscribe to %s", topic);
     }
     
@@ -171,18 +188,23 @@ int MQTT_Handler_Subscribe(mqtt_handler_t *mqtt, const char* topic, int qos)
 int MQTT_Handler_Publish(mqtt_handler_t *mqtt, const char* topic, 
                          const char* data, int data_len, int qos, int retain)
 {
-    if (!mqtt || !mqtt->client || !topic || !data) {
+    if (!mqtt || !mqtt->client || !topic || !data)
+    {
         return -1;
     }
     
-    if (data_len == 0) {
+    if (data_len == 0)
+    {
         data_len = strlen(data);
     }
     
     int msg_id = esp_mqtt_client_publish(mqtt->client, topic, data, data_len, qos, retain);
-    if (msg_id >= 0) {
+    if (msg_id >= 0)
+    {
         ESP_LOGD(TAG, "Published to %s: %.*s, msg_id=%d", topic, data_len, data, msg_id);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Failed to publish to %s", topic);
     }
     
@@ -196,7 +218,8 @@ bool MQTT_Handler_IsConnected(mqtt_handler_t *mqtt)
 
 void MQTT_Handler_Stop(mqtt_handler_t *mqtt)
 {
-    if (!mqtt || !mqtt->client) {
+    if (!mqtt || !mqtt->client)
+    {
         return;
     }
     
@@ -206,11 +229,13 @@ void MQTT_Handler_Stop(mqtt_handler_t *mqtt)
 
 void MQTT_Handler_Deinit(mqtt_handler_t *mqtt)
 {
-    if (!mqtt) {
+    if (!mqtt)
+    {
         return;
     }
     
-    if (mqtt->client) {
+    if (mqtt->client)
+    {
         esp_mqtt_client_destroy(mqtt->client);
         mqtt->client = NULL;
     }
