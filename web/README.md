@@ -1,300 +1,416 @@
-# Web Monitor
+# SHT31 Temperature Monitor Dashboard
 
-## Application Overview
-Your SHT31 monitoring dashboard is a client-side web application that:
-- Connects to MQTT brokers via WebSocket (default: ws://127.0.0.1:8083/mqtt)
-- Displays real-time temperature/humidity data with Chart.js
-- Controls ESP32-based sensor devices
-- Requires no server-side processing (pure static web app)
+A real-time IoT web dashboard for monitoring SHT31 temperature and humidity sensors via MQTT WebSocket connections with Firebase data persistence.
 
-## 🚀 Deployment Strategy Options
+## Overview
 
-### 1. Local Network Deployment (Recommended for IoT)
+This professional-grade web application provides comprehensive monitoring and control capabilities for IoT sensor networks:
 
-**Best for:** Home automation, office monitoring, local IoT networks
+- **Real-time Data Visualization** - Live temperature/humidity charts with statistical analysis
+- **MQTT WebSocket Communication** - Bi-directional communication with ESP32 devices  
+- **Firebase Cloud Integration** - Persistent data storage and historical analysis
+- **Device Control Interface** - Remote relay switching and sampling configuration
+- **Responsive Design** - Optimized for desktop, tablet, and mobile devices
+- **State Synchronization** - Automatic hardware/software state management
 
-**Deployment Steps:**
-- **Simple HTTP Server:** Use Python's built-in server or Node.js `http-server`
-  ```bash
-  # Python approach
-  python -m http.server 8080
-  
-  # Node.js approach  
-  npx http-server -p 8080
-  ```
-- **Apache/Nginx:** Deploy on local web server
-- **Access:** `http://[local-ip]:8080`
+## Architecture
 
-**Pros:** Direct MQTT access, no firewall issues, fast local communication
-**Cons:** Limited to local network access
-
-### 2. Cloud Static Hosting
-
-**Best for:** Remote monitoring, multiple location access, professional deployments
-
-#### Option A: GitHub Pages
-```bash
-1. Create GitHub repository
-2. Upload files to repo
-3. Enable GitHub Pages in Settings
-4. Access via https://yourusername.github.io/repo-name
+```
+Web Dashboard ←→ MQTT Broker ←→ ESP32 ←→ STM32 + SHT31 Sensor
+                      ↓
+              Firebase Database
 ```
 
-#### Option B: Netlify
-- Drag & drop deployment
-- Automatic SSL certificates
-- Custom domain support
-- Deploy via: https://app.netlify.com/drop
+## Quick Start
 
-#### Option C: Vercel
+### Prerequisites
+- MQTT broker with WebSocket support (Mosquitto recommended)
+- Modern web browser with WebSocket support
+- Optional: Firebase account for data persistence
+
+### 1. Setup Web Server
 ```bash
-npx vercel --prod
+# Python (recommended for development)
+python -m http.server 8080
+
+# Node.js alternative
+npx http-server -p 8080
+
+# Access dashboard at http://localhost:8080
 ```
 
-#### Option D: AWS S3 + CloudFront
-- S3 bucket for static hosting
-- CloudFront for CDN distribution
-- Route 53 for custom domains
+### 2. Configure MQTT Connection
+Click the settings button (⚙️) and configure:
+- **MQTT Broker IP**: Your broker's IP address
+- **WebSocket Port**: Default 8083
+- **WebSocket Path**: Default `/mqtt`
+- **Credentials**: Username/password if authentication enabled
 
-**Cloud Hosting Considerations:**
-- MQTT broker must have public WebSocket endpoint
-- Configure CORS for MQTT broker
-- Update MQTT_CONFIG in script.js for public IP
+### 3. Firebase Setup (Optional)
+For data persistence, configure Firebase:
+- **Database URL**: Your Firebase Realtime Database URL
+- **API Key**: Firebase project API key  
+- **Project ID**: Firebase project identifier
 
-### 3. Enterprise/Production Deployment
+## Deployment Options
 
-**Best for:** Industrial monitoring, mission-critical applications
+### Development Environment
+```bash
+# Local testing
+python -m http.server 8080
 
-#### Containerized Deployment
+# Access via http://[local-ip]:8080 for network testing
+```
+
+### Production Deployment
+
+#### Static File Hosting
+```bash
+# Nginx configuration
+server {
+    listen 80;
+    root /var/www/sht31-dashboard;
+    index index.html;
+    
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+```
+
+#### Docker Container
 ```dockerfile
-# Dockerfile
 FROM nginx:alpine
 COPY . /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/nginx.conf
 EXPOSE 80
 ```
 
 ```bash
-# Build and run
-docker build -t sht31-monitor .
-docker run -p 8080:80 sht31-monitor
+docker build -t sht31-dashboard .
+docker run -p 80:80 sht31-dashboard
 ```
 
-#### Kubernetes Deployment
-```yaml
-# k8s-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: sht31-monitor
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: sht31-monitor
-  template:
-    metadata:
-      labels:
-        app: sht31-monitor
-    spec:
-      containers:
-      - name: sht31-monitor
-        image: sht31-monitor:latest
-        ports:
-        - containerPort: 80
+#### Cloud Platforms
+
+**Netlify (Recommended)**
+- Drag and drop deployment
+- Automatic HTTPS
+- CDN distribution
+
+**GitHub Pages**
+```bash
+# Create repository and push files
+git add .
+git commit -m "Initial dashboard deployment"
+git push origin main
+
+# Enable Pages in repository settings
 ```
 
-### 4. Mobile-First PWA Deployment
+**Vercel**
+```bash
+npx vercel --prod
+```
 
-**Convert to Progressive Web App:**
+## Configuration Reference
 
-1. **Add manifest.json:**
+### MQTT Settings
+```javascript
+const MQTT_CONFIG = {
+    host: '192.168.1.100',      // Broker IP address
+    port: 8083,                 // WebSocket port
+    path: '/mqtt',              // WebSocket endpoint
+    username: 'DataLogger',     // MQTT username
+    password: 'your-password'   // MQTT password (optional)
+};
+```
+
+### Firebase Configuration
+```javascript
+const FIREBASE_CONFIG = {
+    apiKey: "your-firebase-api-key",
+    databaseURL: "https://your-project.firebaseio.com/",
+    projectId: "your-project-id"
+};
+```
+
+## MQTT Topic Structure
+
+| Topic | Direction | Purpose | Example Payload |
+|-------|-----------|---------|-----------------|
+| `esp32/sensor/sht3x/command` | Web → ESP32 | Send sensor commands | `SHT3X SINGLE HIGH` |
+| `esp32/control/relay` | Web → ESP32 | Device power control | `RELAY ON` |
+| `esp32/sensor/sht3x/periodic/temperature` | ESP32 → Web | Continuous temperature data | `23.5` |
+| `esp32/sensor/sht3x/periodic/humidity` | ESP32 → Web | Continuous humidity data | `65.2` |
+| `esp32/sensor/sht3x/single/temperature` | ESP32 → Web | Single temperature reading | `24.1` |
+| `esp32/sensor/sht3x/single/humidity` | ESP32 → Web | Single humidity reading | `58.7` |
+| `esp32/state` | Bi-directional | Device state synchronization | `{"device":"ON","periodic":"OFF","rate":1}` |
+
+## Features
+
+### Real-Time Monitoring
+- **Live Charts**: Temperature and humidity visualization with Chart.js
+- **Configurable Sampling**: 0.5Hz to 10Hz periodic sampling rates
+- **Statistical Analysis**: Real-time min/max/average calculations
+- **Current Value Display**: Large, prominent current reading display
+
+### Device Control
+- **Power Management**: Remote relay switching for device control
+- **Operating Modes**: 
+  - Periodic sampling with configurable rates
+  - Single-shot readings on demand
+- **State Synchronization**: Automatic UI/hardware state management
+- **Connection Monitoring**: Real-time MQTT and Firebase status
+
+### Data Management
+- **Cloud Storage**: Firebase Realtime Database integration
+- **Historical Data**: Load and visualize past measurements
+- **Data Export**: Chart data clearing and management
+- **Persistent Settings**: Configuration saved across sessions
+
+### User Interface
+- **Responsive Design**: Desktop, tablet, and mobile optimized
+- **Dark Terminal**: Retro-style status display with color-coded messages
+- **Interactive Controls**: Touch-friendly buttons and controls
+- **Visual Feedback**: Animations and state indicators
+- **Modal Configuration**: Comprehensive settings interface
+
+## Browser Compatibility
+
+### Minimum Requirements
+- **Chrome**: Version 80+
+- **Firefox**: Version 75+
+- **Safari**: Version 13+
+- **Edge**: Version 80+
+
+### Required Features
+- WebSocket API support
+- ES6 JavaScript compatibility
+- HTML5 Canvas for charts
+- CSS Grid and Flexbox
+- Local Storage API
+
+## Security Considerations
+
+### Production Security
+```javascript
+// Secure WebSocket configuration
+const SECURE_MQTT = {
+    protocol: 'wss://',           // Encrypted WebSocket
+    host: 'your-broker.com',
+    port: 443,                    // Standard HTTPS port
+    username: process.env.MQTT_USER,
+    password: process.env.MQTT_PASS
+};
+```
+
+### Best Practices
+- **HTTPS/WSS Only**: Use encrypted connections in production
+- **Strong Authentication**: Implement robust MQTT broker authentication
+- **CORS Configuration**: Properly configure broker CORS settings
+- **Input Validation**: Validate all sensor data and user inputs
+- **Rate Limiting**: Implement MQTT topic rate limiting
+- **Secure Headers**: Add security headers for web deployment
+
+## Troubleshooting
+
+### Connection Issues
+
+**MQTT WebSocket Connection Failed**
+```bash
+# Verify broker WebSocket listener
+netstat -tlnp | grep 8083
+
+# Test WebSocket connectivity
+curl -i -N -H "Connection: Upgrade" \
+     -H "Upgrade: websocket" \
+     -H "Sec-WebSocket-Key: test" \
+     -H "Sec-WebSocket-Version: 13" \
+     http://localhost:8083/mqtt
+```
+
+**CORS Errors**
+```conf
+# Add to mosquitto.conf
+listener 8083
+protocol websockets
+allow_anonymous false
+password_file /mosquitto/config/auth/passwd.txt
+
+# For development only (not recommended for production)
+# http_dir /usr/share/mosquitto/www
+```
+
+**Firebase Connection Issues**
+- Verify Firebase project configuration
+- Check database rules and permissions
+- Ensure API key has proper permissions
+- Verify network connectivity to Firebase
+
+### Data Issues
+
+**Charts Not Updating**
+- Check browser console for JavaScript errors
+- Verify MQTT message reception
+- Confirm Chart.js library loading
+- Check canvas element initialization
+
+**Missing Historical Data**
+- Verify Firebase authentication
+- Check database read/write permissions
+- Confirm data structure matches expected format
+- Test Firebase connectivity independently
+
+### Performance Issues
+
+**High Memory Usage**
+```javascript
+// Limit chart data points
+const maxDataPoints = 50;  // Reduce if needed
+
+// Use efficient chart updates
+chart.update('none');  // Skip animations
+```
+
+**Slow Chart Rendering**
+- Reduce chart animation duration
+- Limit concurrent data points
+- Implement data throttling for high-frequency updates
+
+## Development
+
+### Project Structure
+```
+web/
+├── index.html          # Main dashboard interface
+├── style.css           # Responsive styling and animations
+├── script.js           # Application logic and MQTT handling
+└── Web.md              # This documentation
+```
+
+### Key Components
+
+**MQTT Client Management**
+- Connection handling with automatic reconnection
+- Topic subscription and message routing
+- State synchronization with hardware
+
+**Chart Visualization**
+- Dual-chart layout for temperature/humidity
+- Real-time data streaming
+- Statistical calculations and display
+
+**Firebase Integration**
+- Cloud data persistence
+- Historical data retrieval
+- Connection state management
+
+**Device Control Interface**
+- Relay power switching
+- Sampling mode configuration
+- Frame rate adjustment
+
+### Adding New Features
+
+**Additional Sensor Support**
+1. Extend MQTT topic configuration
+2. Add new chart instances
+3. Update message parsing logic
+4. Modify Firebase data structure
+
+**Enhanced Visualization**
+1. Create new Chart.js configurations
+2. Add statistical analysis functions
+3. Implement data export capabilities
+4. Add customizable chart options
+
+**Mobile App Integration**
+1. Implement PWA manifest
+2. Add service worker for offline support
+3. Optimize touch interactions
+4. Add push notification support
+
+## Performance Optimization
+
+### Resource Management
+- **Memory**: ~10-15MB typical usage
+- **Network**: ~1-2KB/minute at 1Hz sampling
+- **Storage**: ~1MB/day Firebase data
+- **CPU**: Minimal impact with optimized rendering
+
+### Best Practices
+- Limit chart data points (default: 50)
+- Use chart animation skipping for real-time data
+- Implement data throttling for high-frequency sensors
+- Cache Firebase queries when possible
+- Minimize DOM manipulation frequency
+
+## API Reference
+
+### MQTT Commands
+```javascript
+// Device control
+publishMQTT('esp32/control/relay', 'RELAY ON');
+publishMQTT('esp32/control/relay', 'RELAY OFF');
+
+// Sensor commands
+publishMQTT('esp32/sensor/sht3x/command', 'SHT3X SINGLE HIGH');
+publishMQTT('esp32/sensor/sht3x/command', 'SHT3X PERIODIC 1 HIGH');
+publishMQTT('esp32/sensor/sht3x/command', 'SHT3X PERIODIC STOP');
+
+// State synchronization
+publishMQTT('esp32/state', 'REQUEST');
+```
+
+### Firebase Data Structure
 ```json
 {
-  "name": "SHT31 Temperature Monitor",
-  "short_name": "SHT31Monitor",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#667eea",
-  "theme_color": "#667eea",
-  "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+  "sht31": {
+    "temperature": {
+      "timestamp": {
+        "value": 23.5,
+        "timestamp": 1640995200000,
+        "date": "2021-12-31T12:00:00.000Z",
+        "source": "periodic"
+      }
+    },
+    "humidity": {
+      "timestamp": {
+        "value": 65.2,
+        "timestamp": 1640995200000,
+        "date": "2021-12-31T12:00:00.000Z",
+        "source": "periodic"
+      }
     }
-  ]
+  }
 }
 ```
 
-2. **Add service worker for offline support**
-3. **Deploy with HTTPS requirement**
+## Contributing
 
-## 🔧 Configuration Management
+### Development Setup
+1. Fork the repository
+2. Clone locally: `git clone <your-fork>`
+3. Create feature branch: `git checkout -b feature-name`
+4. Make changes and test thoroughly
+5. Submit pull request with detailed description
 
-### Environment-Based Configuration
+### Code Style
+- Use consistent JavaScript ES6+ syntax
+- Follow responsive CSS design patterns
+- Include comprehensive error handling
+- Add appropriate code comments
+- Test across multiple browsers and devices
 
-**Development:**
-```javascript
-const MQTT_CONFIG = {
-    host: '127.0.0.1',
-    port: 8083,
-    path: '/mqtt',
-    username: 'DataLogger',
-    password: 'development'
-};
-```
-
-**Production:**
-```javascript
-const MQTT_CONFIG = {
-    host: 'your-mqtt-broker.com',
-    port: 443,
-    path: '/mqtt',
-    username: 'ProductionUser',
-    password: process.env.MQTT_PASSWORD // Use environment variables
-};
-```
-
-### Dynamic Configuration
-Create a `config.js` that loads different settings based on hostname:
-
-```javascript
-function getMQTTConfig() {
-    const hostname = window.location.hostname;
-    
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return { host: '127.0.0.1', port: 8083, path: '/mqtt' };
-    } else if (hostname.includes('staging')) {
-        return { host: 'staging-mqtt.yourdomain.com', port: 443, path: '/mqtt' };
-    } else {
-        return { host: 'prod-mqtt.yourdomain.com', port: 443, path: '/mqtt' };
-    }
-}
-```
-
-## 🔐 Security Considerations
-
-### MQTT Security
-- **TLS/SSL:** Use `wss://` instead of `ws://` for production
-- **Authentication:** Configure strong MQTT broker credentials
-- **ACL:** Restrict topic access per user/device
-- **VPN:** Consider VPN access for sensitive deployments
-
-### Web Application Security
-- **HTTPS Only:** Force SSL for production deployments
-- **CSP Headers:** Implement Content Security Policy
-- **CORS:** Configure proper CORS settings on MQTT broker
-- **Input Validation:** Validate all MQTT message inputs
-
-## 🌐 Network Architecture Options
-
-### Option 1: Direct MQTT Connection
-```
-[Web App] ←→ [MQTT Broker] ←→ [ESP32 Devices]
-```
-
-### Option 2: API Gateway Pattern
-```
-[Web App] ←→ [API Gateway] ←→ [MQTT Broker] ←→ [ESP32 Devices]
-```
-
-### Option 3: Cloud IoT Platform
-```
-[Web App] ←→ [AWS IoT/Azure IoT] ←→ [ESP32 Devices]
-```
-
-## 📊 Monitoring & Analytics
-
-### Application Monitoring
-- **Error Tracking:** Implement error logging for MQTT failures
-- **Performance:** Monitor chart rendering performance
-- **Uptime:** Track MQTT connection reliability
-
-### Usage Analytics
-```javascript
-// Add to script.js
-function trackEvent(action, label) {
-    // Google Analytics or custom analytics
-    gtag('event', action, {
-        'event_category': 'SHT31Monitor',
-        'event_label': label
-    });
-}
-```
-
-## 🔄 CI/CD Pipeline
-
-### GitHub Actions Example
-```yaml
-name: Deploy SHT31 Monitor
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Deploy to Netlify
-      uses: nwtgck/actions-netlify@v1.2
-      with:
-        publish-dir: './dist'
-        production-branch: main
-      env:
-        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-```
-
-## 🚨 Troubleshooting Deployment Issues
-
-### Common Issues & Solutions
-
-1. **MQTT Connection Failed**
-   - Check WebSocket port is open (8083)
-   - Verify MQTT broker supports WebSockets
-   - Confirm credentials match broker configuration
-
-2. **CORS Errors**
-   - Configure MQTT broker to allow web origin
-   - Use same protocol (http/https) for web app and broker
-
-3. **Chart Not Loading**
-   - Verify Chart.js CDN is accessible
-   - Check browser console for JavaScript errors
-   - Ensure canvas elements exist before chart initialization
-
-4. **Mobile Display Issues**
-   - Test responsive CSS media queries
-   - Verify touch interactions work
-   - Check viewport meta tag is present
-
-## 📱 Mobile App Alternative
-
-Consider converting to a mobile app using:
-- **Cordova/PhoneGap:** Wrap existing web app
-- **React Native:** Rebuild with native MQTT libraries
-- **Flutter:** Cross-platform native development
-- **Ionic:** Hybrid mobile framework
-
-## 🎯 Recommended Deployment Path
-
-**For Development:**
-1. Local HTTP server with local MQTT broker
-
-**For Production:**
-1. **Small Scale:** Netlify + cloud MQTT service
-2. **Enterprise:** Docker + Kubernetes + managed IoT platform
-3. **Mobile-First:** PWA deployment with offline support
-
-**Next Steps:**
-1. Choose your deployment target
-2. Configure MQTT broker for your environment
-3. Update MQTT_CONFIG in script.js
-4. Test end-to-end functionality
-5. Implement monitoring and security measures
+### Testing Checklist
+- [ ] MQTT connection and reconnection
+- [ ] Chart rendering and updates
+- [ ] Firebase integration
+- [ ] Mobile responsiveness
+- [ ] Error handling
+- [ ] State synchronization
+- [ ] Performance under load
 
 ## License
 
-MIT (or update as required).
+MIT License - see project root for details.
