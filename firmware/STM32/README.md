@@ -20,26 +20,26 @@ Main Loop Timer → SHT3X_FetchData() → I2C → Sensor → UART TX (Periodic/S
 
 ```
 STM32/
-├── Core/                    # STM32 HAL core files
+├── Core/                          # STM32 HAL core files
 │   └── src/ 
-│      └── main.c               # Application entry + periodic loop
+│      └── main.c                  # Application entry + periodic loop
 └── Datalogger_Lib/
-    ├── inc/                 # Header files
-    │   ├── uart.h           # UART + ring buffer management
-    │   ├── ring_buffer.h    # Circular buffer implementation
-    │   ├── print_cli.h      # UART output formatting
-    │   ├── cmd_func.h       # Command table structure
-    │   ├── cmd_parser.h     # Command parsing functions
-    │   ├── command_execute.h # Command execution engine
-    │   └── sht3x.h          # SHT3X sensor driver API
-    └── src/                 # Implementation files
-        ├── uart.c           # UART ISR + line assembly
-        ├── ring_buffer.c    # Ring buffer operations
-        ├── print_cli.c      # Printf-style UART output
-        ├── cmd_func.c       # Command lookup table
-        ├── cmd_parser.c     # Individual command handlers
-        ├── command_execute.c # Tokenization + dispatch
-        └── sht3x.c          # I2C sensor communication
+    ├── inc/                       # Header files
+    │   ├── uart.h                 # UART + ring buffer management
+    │   ├── ring_buffer.h          # Circular buffer implementation
+    │   ├── print_cli.h            # UART output formatting
+    │   ├── cmd_func.h             # Command table structure
+    │   ├── cmd_parser.h           # Command parsing functions
+    │   ├── command_execute.h      # Command execution engine
+    │   └── sht3x.h                # SHT3X sensor driver API
+    └── src/                       # Implementation files
+        ├── uart.c                 # UART ISR + line assembly
+        ├── ring_buffer.c          # Ring buffer operations
+        ├── print_cli.c            # Printf-style UART output
+        ├── cmd_func.c             # Command lookup table
+        ├── cmd_parser.c           # Individual command handlers
+        ├── command_execute.c      # Tokenization + dispatch
+        └── sht3x.c                # I2C sensor communication
 ```
 
 ## Key Features
