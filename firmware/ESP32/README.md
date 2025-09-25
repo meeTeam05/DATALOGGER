@@ -5,9 +5,11 @@ ESP32 firmware for bridging STM32-based SHT31 temperature/humidity sensors to MQ
 ## Architecture Overview
 
 ```
-SHT31 Sensor + STM32 ←[UART]→ ESP32 ←[WiFi/MQTT]→ Web Dashboard
-                                ↓
-                         GPIO Relay Control
+MQTT Broker ←→ ESP32 MQTT Handler ←→ STM32 UART Interface ←→ STM32
+                      ↓
+             State Management & Data Processing
+                      ↓
+                 Relay Control (GPIO)
 ```
 
 ## Project Structure
